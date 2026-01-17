@@ -14,6 +14,12 @@ import sys, os
 
 from utils import InitYAMLObject
 
+import time
+try:
+    from scipy.sparse.linalg import eigsh as _eigsh
+except Exception:
+    _eigsh = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +43,7 @@ class PromptFinetuneProbe(Probe, PreTrainedModel):
   yaml_tag = '!PromptFinetuneProbe'
   def __init__(self, args, freeze_layers, num_labels):
     # label_space_size = 2: number of classes
-    print('Constructing PromptFinetuneProbe')
+    # print('Constructing PromptFinetuneProbe')
     torch.manual_seed(args['seed'])
     if 'roberta' in args['model_string']:
         self.config = RobertaConfig.from_pretrained(args['model_string'])
@@ -133,7 +139,7 @@ class PromptLLMProbe(Probe):
   yaml_tag = '!PromptLLMProbe'
   def __init__(self, model_name, num_labels=2, seed=2023, device='cuda:0'):
     # model_name: meta-llama/Llama-2-7b-hf
-    print('Constructing PromptLLMProbe')
+    # print('Constructing PromptLLMProbe')
     torch.manual_seed(seed)
     super(PromptLLMProbe, self).__init__()
     self.num_labels = num_labels
@@ -186,7 +192,7 @@ class PromptLLMProbe(Probe):
 from entks.ntk import compute_ntk, init_torch, process_args, slice_data
 from entks.nlpmodels import SentenceClassifier, PromptSentenceClassifier, PromptLLM
 from entks.ntk_regression import (NTKRegression, NTKRegression_correction_multiclass,
-                                  fastNTKRegression, shapleyNTKRegression)
+                                  fastNTKRegression, shapleyNTKRegression, EigenNTKRegression)
 from easydict import EasyDict as edict
 import pprint
 
@@ -199,10 +205,11 @@ class NTKProbe(Probe):
     yaml_tag = '!NTKProbe'
 
     def __init__(self, args, num_labels):
-        print('Constructing NTKProbe')
+        # print('probe.py Constructing NTKProbe')
         super(NTKProbe, self).__init__()
 
         args = edict(args)
+        # print(f'args: {args}')
         logging.info(f"args =\n{pprint.pformat(vars(args))}")
 
         self.args = args
@@ -214,6 +221,7 @@ class NTKProbe(Probe):
             self.model = PromptLLM(model_name=model, num_labels=self.num_labels, seed=args['seed'])
         else:
             if args['prompt']:
+                # print(f"args['prompt']")
                 self.model = PromptSentenceClassifier(model_name=model, num_frozen_layers=self.freeze_layers,
                                                       num_labels=self.num_labels, seed=args['seed'])
             else:
@@ -223,6 +231,7 @@ class NTKProbe(Probe):
         param_count = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         param_batches = (param_count - 1) // args.grad_chunksize + 1
         logging.info(f"Splitting {param_count} parameters into {param_batches} batches")
+        print(f"Splitting {param_count} parameters into {param_batches} batches")
 
         self.print_param_count()
         self.__name__ = 'NTKProbe'
@@ -237,10 +246,38 @@ class NTKProbe(Probe):
         self.pre_inv = None
         self.args['signgd'] = False
         self.normalize = False
+        
+        ## Eigen parameters
+        self.eigen_rank = None
+        self.eigen_lam = 1e-6
+        self.eigen_solver = "cholesky"
+        self.eigen_dtype = torch.float64
+        self.eigen_decom_mode = "top"  # 'top' or 'random'
+        self.eigen_regression = None  # Will hold EigenNTKRegression instance
+        self.eigen_regression_dict = {}  # Cache for different modes
 
     def approximate(self, method='inv'):
         # method: diagonal, inv
         self.approximate_ntk = method
+
+    def set_eigen_params(self, rank: int, lam: float = 1e-6,
+                         solver: str = "cholesky",
+                         dtype: str = "float64",
+                         eigen_decom_mode: str = "top",
+                         seed: int = 2023):
+        """Configure eigen decomposition parameters."""
+        self.eigen_rank = int(rank)
+        self.eigen_lam = float(lam)
+        self.eigen_solver = solver
+        self.eigen_dtype = torch.float64 if dtype == "float64" else torch.float32
+        self.eigen_decom_mode = eigen_decom_mode
+        self.eigen_seed = seed
+        # Invalidate cached regression model
+        self.eigen_regression = None
+        self.eigen_regression_dict = {}
+
+    def invalidate_eigen_cache(self):
+        self.eigen_regression = None
 
     def signgd(self):
         self.args['signgd'] = True
@@ -253,36 +290,46 @@ class NTKProbe(Probe):
         return self.model(ids, mask, token_type_ids).logits
 
     def compute_ntk(self, train_set, test_set):
+        print(f'probe.py compute_ntk')
         # compute the NTK matrix for train and test set
         self.model = self.model.to(self.device)
+        print(f'self.model = self.model.to(self.device): {self.model}')
+        print(f'if self.single_kernel: {self.single_kernel}') # True
         kwargs = process_args(self.args)
-        if self.debug:
+        print(f'kwargs: {kwargs}')
+        if self.debug: # False
             num_train = len(train_set)
             num_test = len(test_set)
             ntk = torch.zeros(num_train + num_test, num_train)
-        else:
+        else: # self.debug: True
             if self.single_kernel:
+                print('if self.single_kernel:')
                 ntk = compute_ntk(self.model, train_set, test_set, **kwargs)
             else:
+                print(f'if not self.single_kernel:')
                 ntk = compute_ntk(self.model, train_set, test_set, self.num_labels, **kwargs)
-        self.ntk = ntk
+        self.ntk = ntk # ntk 계산 과정 결과 저장 ((num_class) * (train+test) * (train)), 이 결과가 논문의 K(X, X_train)
         # normalize the ntk matrix due to numerical overflow
         if self.normalize:
             self.ntk = self.ntk / 10000
             print("current mean value: ", abs(self.ntk.mean()))
-        self.train_labels = torch.tensor([i['label'] for i in train_set])
+        self.train_labels = torch.tensor([i['label'] for i in train_set]) # train data만큼의 길이 벡터
+        print(f'self.train_labels: {self.train_labels.shape}')
         if self.correction:
             self.get_correction(train_set, test_set)
         return ntk
 
     def get_cached_ntk(self, ntk):
+        # print(f'[DEBUG] NTKProbe get_cached_ntk')
         self.ntk = ntk
         print("current mean value: ", abs(self.ntk.mean()))
         # saved NTK are un-normalized; normalize to avoid numerical overflow
         if abs(self.ntk.mean()) > 1000:
             print("normalize while loading with mean value: ", abs(self.ntk.mean()))
             self.ntk = self.ntk / 10000
-
+        # Invalidate eigen regression when NTK changes
+        self.eigen_regression = None
+        
     def get_train_labels(self, train_set):
         self.train_labels = torch.tensor([i['label'] for i in train_set])
 
@@ -299,6 +346,42 @@ class NTKProbe(Probe):
         if abs(self.ntk.mean()) > 1000:
             print("normalize while loading with mean value: ", abs(self.ntk.mean()))
             self.ntk = self.ntk / 10000
+        # Invalidate eigen regression when NTK is sliced
+        self.eigen_regression = None
+
+    def prepare_eigen_regression(self):
+        """Prepare EigenNTKRegression model if in eigen mode."""
+        if self.approximate_ntk != "eigen":
+            return
+        
+        if self.ntk is None:
+            raise RuntimeError("[eigen] self.ntk is None. compute/load NTK first.")
+        
+        if self.train_labels is None:
+            raise RuntimeError("[eigen] self.train_labels is None. Call get_train_labels() first.")
+        
+        if self.eigen_rank is None:
+            self.eigen_rank = 512  # Default
+        
+        # Use cached regression model for current mode
+        mode_key = self.eigen_decom_mode
+        if mode_key not in self.eigen_regression_dict:
+            print(f"[NTKProbe] Initializing EigenNTKRegression (mode={mode_key})...")
+            self.eigen_regression_dict[mode_key] = EigenNTKRegression(
+                ntk_full=self.ntk,
+                y_train=self.train_labels,
+                n_class=self.num_labels,
+                rank=self.eigen_rank,
+                lam=self.eigen_lam,
+                solver=self.eigen_solver,
+                dtype=self.eigen_dtype,
+                device=self.device,
+                eigen_decom_mode=mode_key,
+                seed=getattr(self, 'eigen_seed', 2023)
+            )
+            print(f"[NTKProbe] EigenNTKRegression ready (mode={mode_key}).")
+        
+        self.eigen_regression = self.eigen_regression_dict[mode_key]
 
     def get_correction(self, full_train_set, full_test_set):
         """
@@ -341,20 +424,38 @@ class NTKProbe(Probe):
                 self.test_logits[i * self.args.loader_batch_size: (i + 1) * self.args.loader_batch_size] = logits
 
     def kernel_regression(self, train_indices, test_set, per_point=False):
+        # print(f'[DEBUG] probe.py NTKProbe.kernel_regression')
+        # print(f'self.ntk: {self.ntk.shape}')
         # perform kernel regression for given train dataset and test dataset
         # select a proper submatrix from the full ntk matrix
         k_train = self.ntk[:, train_indices[:, None], train_indices]
         y_train = self.train_labels[train_indices]
+        # print(f'k_train: {k_train.shape}')
+        # print(f'y_train: {y_train.shape}')
+        if self.approximate_ntk == 'eigen':
+            self.prepare_eigen_regression()
+            test_preds = self.eigen_regression(train_indices)
+            test_labels = torch.tensor([i['label'] for i in test_set])
+            
+            if per_point:
+                test_acc = (test_preds.argmax(dim=1) == test_labels).float()
+                test_loss = F.cross_entropy(test_preds, test_labels, reduction='none').detach().cpu().numpy()
+                return test_loss, test_acc
+            
+            test_acc = (test_preds.argmax(dim=1) == test_labels).float().mean()
+            test_loss = F.cross_entropy(test_preds, test_labels, reduction='mean').item()
+            return test_loss, test_acc
 
         # construct the kernel matrix for the train set
         if self.correction:
             kr_model = NTKRegression_correction_multiclass(k_train, y_train, self.num_labels,
                                                            train_logits=self.train_logits[train_indices],
                                                            test_logits=self.test_logits)
-        else:
+        else: # Default: 'inv'
             if self.approximate_ntk == 'diagonal':
                 kr_model = fastNTKRegression(k_train, y_train, self.num_labels, batch_size=50)
-            elif self.approximate_ntk == 'inv':
+            elif self.approximate_ntk == 'inv': # 여기
+                # print(f"elif self.approximate_ntk == 'inv':")
                 if len(train_indices) % 500 == 0:
                     self.pre_inv = None
                 kr_model = shapleyNTKRegression(k_train, y_train, self.num_labels, self.pre_inv)
@@ -362,13 +463,15 @@ class NTKProbe(Probe):
                 kr_model = NTKRegression(k_train, y_train, self.num_labels)
 
         k_test = self.ntk[:, self.ntk.size(2):, :]
+        # print(f'k_test: {k_test.shape}')
         k_test = k_test[:, :, train_indices]
+        # print(f'k_test: {k_test.shape}')
         # improvement note: 500 can be adjustable
         if self.approximate_ntk == 'inv' and len(train_indices) >= 500:
-            test_preds, pre_inv = kr_model(k_test, return_inv=True)
+            test_preds, pre_inv = kr_model(k_test, return_inv=True) # forward
             self.pre_inv = pre_inv
         else:
-            test_preds = kr_model(k_test)
+            test_preds = kr_model(k_test) # forward
         test_preds = test_preds.to('cpu')
         test_labels = torch.tensor([i['label'] for i in test_set])
 
@@ -430,7 +533,7 @@ class FinetuneProbe(Probe, PreTrainedModel):
   yaml_tag = '!FinetuneProbe'
   def __init__(self, args, freeze_layers, num_labels):
     # label_space_size = 2: number of classes
-    print('Constructing FinetuneProbe')
+    # print('Constructing FinetuneProbe')
     torch.manual_seed(args['seed'])
     config = BertConfig.from_pretrained(args['model_string'])
     # disable dropout so that there is no randomness

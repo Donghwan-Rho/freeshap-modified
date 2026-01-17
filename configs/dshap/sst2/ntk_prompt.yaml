@@ -26,10 +26,10 @@ probe_com: !NTKProbe &id_probe_com
     savedir: ./ntks
     logdir: null
     workers_per_device: 1
-    grad_chunksize: 10000000 # adjust this value if memory is insufficient: 10000000
-    mm_col_chunksize: 20000
+    grad_chunksize: 50000 # adjust this value if memory is insufficient: 10000000
+    mm_col_chunksize: 4000
     loader_batch_size: 16  # adjust this value if memory is insufficient
-    loader_num_workers: 1   # when memory is pinned, don't set this to non-zero values
+    loader_num_workers: 0   # when memory is pinned, don't set this to non-zero values
     pin_memory: False # setting it to true will cause cpu to stuck at termination (might have a fix though)
     allow_tf32: False
     benchmark: False

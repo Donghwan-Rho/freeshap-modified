@@ -50,12 +50,13 @@ class PromptSentenceClassifier(PreTrainedModel):
   yaml_tag = '!PromptSentenceClassifier'
   def __init__(self, model_name, num_frozen_layers=8, num_labels=2, seed=2023):
     # label_space_size = 2: number of classes
-    print('Constructing PromptFinetuneProbe')
+    # print('Constructing PromptFinetuneProbe """class PromptSentenceClassifier(PreTrainedModel)"""')
     torch.manual_seed(seed)
     if 'roberta' in model_name:
         self.config = RobertaConfig.from_pretrained(model_name)
     else:
         self.config = BertConfig.from_pretrained(model_name)
+    # print(f'self.config: {self.config}')
     # disable dropout so that there is no randomness
     self.config.hidden_dropout_prob = 0
     self.config.attention_probs_dropout_prob = 0
@@ -76,11 +77,33 @@ class PromptSentenceClassifier(PreTrainedModel):
         if hasattr(self.model.bert, 'pooler') and self.model.bert.pooler is not None:
             for param in self.model.bert.pooler.parameters():
                 param.requires_grad = False
-
+        # # ★ 여기 추가: embedding freeze
+        # for param in self.model.bert.embeddings.parameters():
+        #     param.requires_grad = False
+            
     for module in modules:
       for param in module.parameters():
         param.requires_grad = False
             
+    # # For debug            
+    # print("=== Parameter freeze status ===")
+    # total_params = 0
+    # trainable_params = 0
+
+    # for name, param in self.model.named_parameters():
+    #     numel = param.numel()
+    #     total_params += numel
+    #     if param.requires_grad:
+    #         trainable_params += numel
+    #         status = "TRAINABLE"
+    #     else:
+    #         status = "FROZEN"
+    #     print(f"[{status}] {name:60s} shape={tuple(param.shape)}")
+
+    # print(f"Total params: {total_params}")
+    # print(f"Trainable params: {trainable_params}")
+    # print(f"Frozen params: {total_params - trainable_params}")
+
     self.model_name = model_name
 
   def init(self, label_word_list):
@@ -138,7 +161,7 @@ class PromptLLM(nn.Module):
   yaml_tag = '!PromptLLM'
   def __init__(self, model_name, num_labels=2, seed=2023):
     # model_name: meta-llama/Llama-2-7b-hf
-    print('Constructing PromptLLM')
+    # print('Constructing PromptLLM')
     torch.manual_seed(seed)
     super(PromptLLM, self).__init__()
     self.num_labels = num_labels

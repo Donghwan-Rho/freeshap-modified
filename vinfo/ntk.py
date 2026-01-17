@@ -87,7 +87,7 @@ def run_yaml_experiment(yaml_path, just_cache_data, dataset_name, num_dp, val_sa
     # sample a set of data points to conduct data valuation
     np.random.seed(seed)
     random.seed(seed)
-    if dataset_name == "sst2":
+    if dataset_name == "sst2": # 여기
         dataset = load_dataset("sst2")
     elif dataset_name == "mr":
         dataset = load_dataset("rotten_tomatoes")
@@ -177,7 +177,12 @@ if __name__ == '__main__':
     from torch.multiprocessing import set_start_method, set_sharing_strategy
     import torch.multiprocessing as mp
 
-    set_start_method("spawn")
+    try:
+        set_start_method("spawn", force=True)
+    except RuntimeError:
+        # 이미 설정되어 있으면 그냥 넘어감
+        pass
+    
     set_sharing_strategy("file_system")
 
     import os
