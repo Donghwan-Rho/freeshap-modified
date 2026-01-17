@@ -209,6 +209,15 @@ def main():
 
     sorted_indices = np.argsort(acc_sum_per_train)[::-1]  # 큰 값이 앞
     all_indices = np.arange(len(sampled_idx))
+    
+    # Save sorted indices (top to bottom) to txt file
+    indices_txt_path = shapley_path.replace('.pkl', '_indices.txt')
+    # Convert internal indices to original dataset indices
+    original_indices = sampled_idx[sorted_indices]
+    with open(indices_txt_path, 'w') as f:
+        for idx in original_indices:
+            f.write(f"{idx}\n")
+    print(f"[info] saved sorted indices to {indices_txt_path}")
 
     # # ===== 6) Evaluate KRR for all num_train_selected values =====
     # print(f"\n{'='*80}")
