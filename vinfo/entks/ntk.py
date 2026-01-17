@@ -46,6 +46,11 @@ def cleanup():
     gc.collect()
 
 def _init_compute_gradients(model, params_slice, buffer_size):
+    # print(f'vinfo/entks/ntk.py """_init_compute_gradients"""')
+    # print(f'model: {model}')
+    # for name, param in model.named_parameters():
+    #     print(name, param.shape, param.requires_grad)
+        
     if not "model" in local.__dict__:
         local.model = model.cuda()
 
@@ -53,6 +58,23 @@ def _init_compute_gradients(model, params_slice, buffer_size):
         param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
         grad_size = param_count + (-param_count % buffer_size[1])
         local.grad = torch.zeros(grad_size, dtype=torch.float, device="cuda")
+        # print(f"[DEBUG] param_count: {param_count}")
+
+    # For debugging
+    slot_start = 0
+    # print(f"[DEBUG] params_slice: {params_slice}")
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        slot_stop = slot_start + param.numel()
+
+        # 이 파라미터가 이번 params_slice와 겹치면 찍기
+        if not (slot_stop <= params_slice.start or slot_start >= params_slice.stop):
+            # print(f"[DEBUG active] name={name}, slot={slice(slot_start, slot_stop)}, shape={param.shape}")
+            ...
+
+        slot_start = slot_stop
+
 
     slot_start = 0
     local.active_params = []
@@ -97,11 +119,17 @@ def _compute_gradients(model, params_slice, buffer_size, data, batch_info):
 
 
 def _compute_gradients_nlp(model, params_slice, buffer_size, data, batch_info, class_i=0, signgd=False):
-    if not "params_slice" in local.__dict__ or local.params_slice != params_slice:
+    # print(f'vinfo/entks/ntk.py """_compute_gradients_nlp"""')
+    # print(f"data['input_ids']: {data['input_ids'].shape}")
+    # print(f'buffer_size: {buffer_size}') # (b, C1)
+    # print(f'params_slice: {params_slice}')
+    if not "params_slice" in local.__dict__ or local.params_slice != params_slice: # 실행됨
+        # print('if not "params_slice" in local.__dict__ or local.params_slice != params_slice:')
         _init_compute_gradients(model, params_slice, buffer_size)
 
-    local.grad.zero_()
-    gpu_buffer = torch.zeros(buffer_size, device="cuda")
+    local.grad.zero_() # local.grad: 길이 P tensor
+    # print(f"[DEBUG] local.grad.shape: {local.grad.shape}")
+    gpu_buffer = torch.zeros(buffer_size, device="cuda") # (b, C1)
     del data['label']
 
     data = to_cuda(data)
@@ -110,8 +138,10 @@ def _compute_gradients_nlp(model, params_slice, buffer_size, data, batch_info, c
         # input_ids = data['input_ids']
         # attention_masks = data['attention_mask']
         local.model.zero_grad(set_to_none=True)
-        local.model.forward(slice_data(data, i, i+1))[0][class_i].backward()
+        # print(f"slice_data(data, i, i+1): {slice_data(data, i, i+1)['input_ids'].shape}")
+        local.model.forward(slice_data(data, i, i+1))[0][class_i].backward() # local.model.forward(slice_data(data, i, i+1))[0][class_i]: scalar
         for slot, param in local.active_params:
+            # print(f'slot: {slot}, param: {param.shape}, {param.name}')
             try:
                 if signgd:
                     local.grad[slot] = torch.sign(param.grad.flatten())
@@ -124,7 +154,10 @@ def _compute_gradients_nlp(model, params_slice, buffer_size, data, batch_info, c
                 print(param.size())
                 print(slot)
                 exit()
-        gpu_buffer[i] = local.grad[local.params_slice]
+            # print(f'local.grad[slot]: {local.grad[slot].shape}')
+        gpu_buffer[i] = local.grad[local.params_slice] # gpu_buffer: batch i에 대해 chunk만큼의 grad를 담음. gpu_buffer: batch x chunk
+        # print(f'local.params_slice: {local.params_slice}')
+        # print(f'gpu_buffer[i], {gpu_buffer[i].shape}')
 
     del data
     torch.cuda.empty_cache()
@@ -176,13 +209,22 @@ def wrap_loader(loader):
 
 
 def compute_gradients(in_queue, out_queue, model, params_slice, loader, out, class_i=0, signgd=False):
+    print(f'vinfo/entks/ntk.py compute_gradients')
+    print(f'in_queue: {in_queue}')
+    print(f'out_queue: {out_queue}')
     buffer_size = (loader.batch_size, out.size()[1])
 
     in_flight = 0
     pbar = tqdm(total=len(loader.dataset))
 
-    for batch, batch_info in wrap_loader(loader):
+    for batch, batch_info in wrap_loader(loader): # batch: row 방향(sample 갯수) 측면에서의 batch
+        # grad_chunksize: column을 얼마나 크게 잘라서 grad 계산할지(col 크기: parameters 전체 개수(53M))
+        # mm_col_chunksize: 이전에 저장된 grads를 가지고 NTK를 계산하는 col 방향 chunk
+        # print(f'batch: {batch}')
+        # print(f'batch_info: {batch_info}')
+        # print(f"batch['input_ids']: {batch['input_ids'].shape}") # input_ids: [batch_size, seq_len] (SST의 경우, configs/dshap/sst2/ntk_prompt.yaml에서 seq_len 64로 설정)
         if isinstance(batch, dict): # For BERT
+            # print(f'if isinstance(batch, dict): # For BERT')
             data = batch
             args = (model, params_slice, buffer_size, _clone_data(data), batch_info, class_i, signgd)
             in_queue.put((_compute_gradients_nlp, args))
@@ -191,6 +233,7 @@ def compute_gradients(in_queue, out_queue, model, params_slice, loader, out, cla
             args = (model, params_slice, buffer_size, _clone_data(data), batch_info)
             in_queue.put((_compute_gradients, args))
         in_flight += 1
+        # print(f'in_flight: {in_flight}')
 
         if in_flight >= 36:
             gpu_buffer, batch_info = out_queue.get()
@@ -198,7 +241,7 @@ def compute_gradients(in_queue, out_queue, model, params_slice, loader, out, cla
             batch_slice, batch_len = batch_info
             del gpu_buffer
 
-            out[batch_slice].copy_(gpu_buffer_clone[:batch_len])
+            out[batch_slice].copy_(gpu_buffer_clone[:batch_len]) # 이 out에 batch_slice 위치에 해당하는 grad들이 쌓임
             del gpu_buffer_clone
             in_flight -= 1
             pbar.update(batch_len)
@@ -218,44 +261,57 @@ def compute_gradients(in_queue, out_queue, model, params_slice, loader, out, cla
 
 
 def _compute_XXt(chunk, buffer_size, buffer_dtype, train_slice, test_slice):
-    if not "buffer" in local.__dict__:
+    # slice(=한 compute_XXt phase) 기준 카운터
+    if "xx_count" not in local.__dict__:
+        local.xx_count = 0
+    local.xx_count += 1
+
+    if "buffer" not in local.__dict__:
         local.buffer = torch.zeros(buffer_size, dtype=buffer_dtype, device="cuda")
 
     chunk = chunk.to(local.buffer)
     local.buffer.addmm_(chunk[test_slice], chunk[train_slice].T)
-
-
+    
 def _return_XXt_buffer():
-    assert "buffer" in local.__dict__
+    has_buf = "buffer" in local.__dict__
+    if not has_buf:
+        print("[XXt buffer missing] pid", os.getpid(),
+              "device", torch.cuda.current_device(),
+              "xx_count", getattr(local, "xx_count", 0))
+    assert has_buf
     return local.buffer
 
 
 def _clear_XXt_buffer():
-    assert "buffer" in local.__dict__
+    if "buffer" not in local.__dict__:
+        print("[XXt clear missing] pid", os.getpid(),
+              "device", torch.cuda.current_device(),
+              "xx_count", getattr(local, "xx_count", 0))
+        local.xx_count = 0
+        return
     del local.buffer
+    local.xx_count = 0
     torch.cuda.empty_cache()
-
-
-def compute_XXt(
-    in_queue_XXt, in_queues_devices, out_queue, X, out, row_chunksize, col_chunksize
-):
+    
+    
+def compute_XXt(in_queue_XXt, in_queues_devices, out_queue, X, out, row_chunksize, col_chunksize):
     in_flight = 0
     train_slice = slice(0, out.size()[1])
+    num_devices = len(in_queues_devices)
+
     for i in range(0, X.size()[0], row_chunksize):
         test_slice = slice(i, i + row_chunksize)
-        for j in tqdm(range(0, X.size()[1], col_chunksize)):
-            chunk = X[:, j : j + col_chunksize].clone()
-            args = (
-                chunk,
-                out[test_slice].shape,
-                out.dtype,
-                train_slice,
-                test_slice,
-            )
-            in_queue_XXt.put((_compute_XXt, args))
+
+        # (1) _compute_XXt 작업을 "공유큐"가 아니라 "디바이스 전용큐"로 분배
+        for jj, j in enumerate(range(0, X.size()[1], col_chunksize)):
+            chunk = X[:, j:j+col_chunksize].clone()
+            args = (chunk, out[test_slice].shape, out.dtype, train_slice, test_slice)
+
+            dev = jj % num_devices
+            in_queues_devices[dev].put((_compute_XXt, args))
             in_flight += 1
 
-            if in_flight >= 3 * len(in_queues_devices):
+            if in_flight >= 3 * num_devices:
                 _ = out_queue.get()
                 in_flight -= 1
 
@@ -263,8 +319,9 @@ def compute_XXt(
             _ = out_queue.get()
             in_flight -= 1
 
-        for in_queue in in_queues_devices:
-            in_queue.put((_return_XXt_buffer, ()))
+        # (2) 버퍼 회수/clear는 기존대로
+        for q in in_queues_devices:
+            q.put((_return_XXt_buffer, ()))
             in_flight += 1
 
         while in_flight > 0:
@@ -274,8 +331,8 @@ def compute_XXt(
             del gpu_buffer
             in_flight -= 1
 
-        for in_queue in in_queues_devices:
-            in_queue.put((_clear_XXt_buffer, ()))
+        for q in in_queues_devices:
+            q.put((_clear_XXt_buffer, ()))
             in_flight += 1
 
         while in_flight > 0:
@@ -299,6 +356,9 @@ def compute_ntk(
         signgd=False,
         init_torch_kwargs={},
 ):
+    print('vinfo/entks/ntk.py compute_ntk')
+    print("num_devices =", num_devices)
+    print("cuda_visible_devices =", os.environ.get("CUDA_VISIBLE_DEVICES"))
     if num_devices is None:
         num_devices = torch.cuda.device_count()
     if grad_chunksize is None:
@@ -338,7 +398,7 @@ def compute_ntk(
     model.eval()
 
     if test_set is not None: # for sst2, the test_set is constructed from val partition
-        train_test_sets = torch.utils.data.ConcatDataset([train_set, test_set])
+        train_test_sets = torch.utils.data.ConcatDataset([train_set, test_set]) # k+T
     else:
         train_test_sets = train_set
     loader = torch.utils.data.DataLoader(train_test_sets, **loader_kwargs)
@@ -355,8 +415,9 @@ def compute_ntk(
 
 
     pin_begin = time.time()
-    grads_size = (len(loader.dataset), grad_chunksize)
+    grads_size = (len(loader.dataset), grad_chunksize) # (train+test) * chunk
     grads = torch.zeros(grads_size, dtype=torch.float, pin_memory=pin_memory)
+    print(f'grads_size: {grads_size}')
     pin_end = time.time()
     logging.info(f"Allocated grads in {int(pin_end - pin_begin)}s")
 
@@ -365,19 +426,21 @@ def compute_ntk(
     logging.info(f"Total parameter count: {int(param_count)}")
 
     ntk_list = []
-    for class_i in range(num_class):
-        ntk = torch.zeros((len(train_test_sets), len(train_set)), dtype=ntk_dtype)
+    for class_i in range(num_class): # num_class: 기본 1
+        ntk = torch.zeros((len(train_test_sets), len(train_set)), dtype=ntk_dtype) # ntk size: (train pt + test pt) * (train pt)
 
 
         for i, params_start in enumerate(range(0, param_count, grad_chunksize)):
             logging.info(f"Starting batch {i + 1}/{param_batches}")
+            print(f"Starting batch {i + 1}/{param_batches}")
 
             params_stop = params_start + grad_chunksize
-            params_slice = slice(params_start, params_stop)
+            params_slice = slice(params_start, params_stop) # 나눠서 계산될 J의 열 부분
+            print(f'params_start/stop/slice: {params_start}/{params_stop}/{params_slice}')
             # logging.info(f"param slices: {params_start}, {params_stop}")
 
             grads_begin = time.time()
-            compute_gradients(in_queue_grad, out_queue, model, params_slice, loader, grads, class_i, signgd)
+            compute_gradients(in_queue_grad, out_queue, model, params_slice, loader, grads, class_i, signgd) # 인자의 grads가 compute_gradients의 out임
             grads_end = time.time()
             # logging.info(f"Computed partial Jacobian in {int(grads_end - grads_begin)}s")
             torch.cuda.empty_cache()
@@ -407,7 +470,7 @@ def compute_ntk(
             # logging.info("Clean up completed.")
             # raise KeyboardInterrupt
 
-        ntk_list.append(ntk)
+        ntk_list.append(ntk) # n_class개 만큼의 ntk 행렬이 list로 추가됨
 
     for i in range(num_workers):
         logging.info(f"Terminating worker {i}")
@@ -417,7 +480,7 @@ def compute_ntk(
     for p in processes:
         p.join()
 
-    ntk_list = torch.stack(ntk_list, dim=0)
+    ntk_list = torch.stack(ntk_list, dim=0) # n_class * (train+test) * (train)
     return ntk_list
 
 

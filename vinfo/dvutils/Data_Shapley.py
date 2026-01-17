@@ -49,13 +49,13 @@ def worker(subset, data_loader, val_loader, train_process, probe_model, gpu_id, 
     else:
         return frozenset(), null_score
 
-
 ########################################################## FreeShap #############################################
 class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
     ''' Running data shapley based on NTK '''
     yaml_tag = '!Fast_Data_Shapley'
 
     def __init__(self, dataset, probe_model, num_metric):
+        print(f'[DEBUG] Data_Shapely.py Fast_Data_Shapley')
         Adpt_Shapley.__init__(self, probe_model, None, None, None)
         self.dataset = dataset
         self.probe_model = probe_model
@@ -74,22 +74,18 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         self.initialize_ntk_state = False
 
     def tmc_one_iteration_idx(self, target_idx=0, approximate=False):
-        """Runs one iteration of TMC-Shapley algorithm to find shapley value for target_idx"""
         idxs = np.random.permutation(self.n_participants)
-        # print(idxs[:10])
 
-        # find position for target_idx (the target_idx is always the first one)
         target_pos = np.where(idxs == target_idx)[0][0]
 
-        # V(S)
         if target_pos == 0:
             old_score = self.get_null_score()
         else:
             selected_idx = idxs[:target_pos]
-
             if approximate:
-                new_v_entropy, new_acc = self.probe_model.kernel_regression_idx(selected_idx, self.val_set,
-                                                                                has_pre_inv=False)
+                new_v_entropy, new_acc = self.probe_model.kernel_regression_idx(
+                    selected_idx, self.val_set, has_pre_inv=False
+                )
             else:
                 new_v_entropy, new_acc = self.probe_model.kernel_regression(selected_idx, self.val_set)
             old_score = np.array([-new_v_entropy, new_acc])
@@ -98,10 +94,11 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
             torch.cuda.empty_cache()
         gc.collect()
 
-        # V(S U {i})
         selected_idx = idxs[:target_pos + 1]
         if approximate:
-            new_v_entropy, new_acc = self.probe_model.kernel_regression_idx(selected_idx, self.val_set, has_pre_inv=True)
+            new_v_entropy, new_acc = self.probe_model.kernel_regression_idx(
+                selected_idx, self.val_set, has_pre_inv=True
+            )
         else:
             new_v_entropy, new_acc = self.probe_model.kernel_regression(selected_idx, self.val_set)
         new_score = np.array([-new_v_entropy, new_acc])
@@ -120,7 +117,6 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         _tmc_compute(marginal_contribs=marginal_contribs)
 
     def tmc_one_iteration_debug(self):
-        """One iteration of TMC-Shapley algorithm and mainly to check the marginal contribution"""
         idxs = np.random.permutation(self.n_participants)
         marginal_contribs = np.zeros([self.n_participants, self.num_metric])
 
@@ -142,9 +138,7 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
 
         return tmp_inspect, marginal_contribs
 
-
     def tmc_one_iteration(self, early_stopping=False, tolerance=0.05):
-        """One iteration of FreeShap algorithm"""
         def _tmc_compute(idxs, marginal_contribs):
             for metric_idx in range(self.num_metric):
                 for idx in idxs:
@@ -184,6 +178,8 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
 
     def tmc_one_iteration_per_point(self, early_stopping=False, tolerance=0.05):
         """One iteration of FreeShap algorithm and enables to get instance-level shapley value"""
+        # print(f'[DEBUG] tmc_one_iteration_idx_per_point self.probe_model.ntk.shape: {self.probe_model.ntk.shape}')
+
         def _tmc_compute(idxs, marginal_contribs):
             for metric_idx in range(self.num_metric):
                 for idx in idxs:
@@ -191,52 +187,49 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
 
         idxs = np.random.permutation(self.n_participants)
         marginal_contribs = np.zeros([self.n_participants, self.num_metric, len(self.val_set)])
+        # print(f'marginal_contribs: {marginal_contribs.shape}')
 
-        # truncation_counter = 0
         new_score = self.get_null_score_per_point()
+        # print(f'new_score: {new_score}')
         null_score_ = np.array([new_score[0].sum()/len(self.val_set), new_score[1].sum()/len(self.val_set)])
+        # print(f'null_score_: {null_score_.shape}')
+
         selected_idx = []
         for n, idx in enumerate(idxs):
             old_score = new_score
             selected_idx.append(idx)
 
-            new_v_entropy, new_acc = self.probe_model.kernel_regression(np.array(selected_idx), self.val_set,
-                                                                        per_point=True)
+            new_v_entropy, new_acc = self.probe_model.kernel_regression(
+                np.array(selected_idx), self.val_set, per_point=True
+            )
             new_score = np.array([-new_v_entropy, new_acc.numpy()])
             marginal_contribs[idx] = (new_score - old_score)
 
-
             if early_stopping:
                 new_score_ = np.array([new_score[0].sum()/len(self.val_set), new_score[1].sum()/len(self.val_set)])
-                # print(new_score_)
                 distance_to_full_score = np.abs(new_score_ - self.get_full_score_per_point())
                 if (distance_to_full_score <= tolerance * np.abs(self.get_full_score_per_point() - null_score_)).all():
                     truncation_counter += 1
                     if truncation_counter > 1:
-                        # print(n)
                         break
                 else:
                     truncation_counter = 0
 
-        # self.mc_cache.append(np.copy(marginal_contribs))
         _tmc_compute(idxs=idxs, marginal_contribs=marginal_contribs)
         self.probe_model.pre_inv = None
 
     def get_null_score(self):
-        """To compute the performance with initial weight"""
         try:
             self.null_score
         except:
-            # If the trainset is empty, ntk cannot be used. Thus, we adopt random guessing as the null score.
             num_labels = self.probe_model.num_labels
             acc = 1.0 / num_labels
             v_entropy = -num_labels * acc * np.log(acc)
-            # improvement idea: might need to adjust this based on the actual distribution of the dataset (num_instances in each class)
             self.null_score = np.array([-v_entropy, acc])
         return self.null_score
 
     def get_full_score(self):
-        """To compute the performance on grand coalition"""
+        # print(f'[DEBUG] Fast_Data_Shapley get_full_score')
         try:
             self.full_score
         except:
@@ -247,21 +240,19 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         return self.full_score
 
     def get_null_score_per_point(self):
-        """To compute the performance with initial weight"""
         try:
             self.null_score
         except:
-            # If the trainset is empty, ntk cannot be used. Thus, we adopt random guessing as the null score.
             num_labels = self.probe_model.num_labels
             acc = 1.0 / num_labels
             v_entropy = -num_labels * acc * np.log(acc)
-
-            self.null_score = np.array([np.full((len(self.val_set),), -v_entropy),
-                                        np.full((len(self.val_set),), acc)])
+            self.null_score = np.array([
+                np.full((len(self.val_set),), -v_entropy),
+                np.full((len(self.val_set),), acc)
+            ])
         return self.null_score
 
     def get_full_score_per_point(self):
-        """To compute the performance on grand coalition"""
         try:
             self.full_score
         except:
@@ -271,10 +262,7 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         return self.full_score
 
     def initialize_ntk(self):
-        # Given that train_loader and val_loader are provided in run(), prepare datasets
-        # Set parameters for ntk computation
-        # compute ntk matrix
-        print("---------------------------initialize ntk-------------------------------")
+        # print("---------------------------initialize ntk-------------------------------")
         self.probe_model.compute_ntk(self.train_set, self.val_set)
         self.initialize_ntk_state = True
 
@@ -311,17 +299,25 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
             per_point=False,
             early_stopping=False,
             tolerance=0.05):
-        """Compute the sv with different method"""
-        print("start to compute shapley value")
+        # print(f'[DEBUG] DAta_Shapely.py Fast_Data_Shapely run')
+        # print("start to compute shapley value")
         if seed != 2023:
             np.random.seed(seed)
+
         self.data_idx = data_idx
         self.n_participants = len(data_idx)
         self.tmc_iteration = iteration
+
         self.sv_result = np.zeros([self.n_participants, self.num_metric])
         if per_point:
             self.sv_result = np.zeros([self.n_participants, self.num_metric, len(val_data_idx)])
+
         self.mc_cache = []
+        # print(f'self.data_idx: {self.data_idx}')
+        # print(f'self.n_participants: {self.n_participants}')
+        # print(f'self.tmc_iteration: {self.tmc_iteration}')
+        # print(f'self.sv_result: {self.sv_result.shape}')
+        # print(f'per_point: {per_point}')
 
         train_set = self.dataset.get_idx_dataset(data_idx, split="train")
         val_set = self.dataset.get_idx_dataset(val_data_idx, split="val")
@@ -331,28 +327,42 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
 
         self.metric = metric
         if method == "tmc":
-            # prepare the ntk matrix for the full dataset
+            # print(f'if method == "tmc":')
+
             if not use_cache_ntk:
+                # print(f'if not use_cache_ntk:')
                 self.initialize_ntk()
+
+            # ===== NEW: eigen features precompute (딱 1번) =====
+            if getattr(self.probe_model, "approximate_ntk", None) == "eigen":
+                # print("[DEBUG] Fast_Data_Shapley.run: prepare eigen features once before TMC loop")
+                self.probe_model.prepare_eigen_regression()
+
             full_score = self.get_full_score()
             # print(f"full_score: {full_score}")
-            # run tmc iterations based on the ntk matrix
+
             for curr_iter in tqdm(range(iteration), desc='[TMC iterations]'):
-                # self.tmc_one_iteration_idx()
                 if per_point:
                     self.tmc_one_iteration_per_point(early_stopping=early_stopping)
                 else:
                     self.tmc_one_iteration(early_stopping=early_stopping, tolerance=tolerance)
                     if checkpoint and curr_iter % 20 == 0:
-                        with open(f"../cache/{self.dataset.data_loader.dataset_name}_shapley_cache_{prompt}_seed{seed}_num{num_dp}_tolerance{tolerance}.pkl", "wb") as f:
+                        with open(
+                            f"cache/{self.dataset.data_loader.dataset_name}_shapley_cache_{prompt}_seed{seed}_num{num_dp}_tolerance{tolerance}.pkl",
+                            "wb"
+                        ) as f:
                             pickle.dump(self.mc_cache, f)
                             pickle.dump(self.ac_cache, f)
+
             sv_result = self.sv_result
+
         elif method == "exact":
+            print(f'elif method == "exact":')
             self.exact_method(metric)
             sv_result = self.exact_sv_from_mem()
-        return sv_result
 
+        return sv_result
+    
     def run_idx_init(self,
                      data_idx,
                      val_data_idx,

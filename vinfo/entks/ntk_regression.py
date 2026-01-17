@@ -9,10 +9,248 @@ import time
 
 from .ntk import load_ntk, save_ntk
 
+try:
+    from scipy.sparse.linalg import eigsh as _eigsh
+except Exception:
+    _eigsh = None
+
+
+################################### Kernel regression with Eigen Decomposition ########################################
+class EigenNTKRegression(nn.Module):
+    def __init__(self, ntk_full, y_train, n_class, rank=512, lam=1e-6, solver="cholesky", dtype=torch.float32, device='cuda:0', eigen_decom_mode="top", seed=2023):
+        # print(f'>>> dtype={dtype}, device={device}')
+        """
+        Kernel ridge regression using eigen decomposition for efficient computation.
+        
+        Parameters
+        ----------
+        ntk_full : torch.Tensor
+            Full NTK matrix of shape [1, n_total, n_train] or [n_total, n_train]
+        y_train : torch.Tensor
+            Training labels
+        n_class : int
+            Number of classes
+        rank : int
+            Number of eigenvalues/eigenvectors to use
+        lam : float
+            Ridge regularization parameter
+        solver : str
+            'cholesky' or 'lstsq'
+        dtype : torch.dtype
+            Data type for computation (float64 recommended)
+        device : str or torch.device
+            Device for computation
+        eigen_decom_mode : str
+            'top' (use largest eigenvalues) or 'random' (use random eigenvalues)
+        seed : int
+            Random seed for 'random' mode
+        """
+        super(EigenNTKRegression, self).__init__()
+        self.y = y_train
+        self.n_class = n_class
+        self.rank = rank
+        self.lam = lam
+        self.solver = solver
+        self.dtype = dtype
+        self.device = torch.device(device) if isinstance(device, str) else device
+        self.eigen_decom_mode = eigen_decom_mode
+        self.seed = seed
+        
+        # Prepare eigen features
+        self.phi_tr, self.phi_te = self._precompute_eigen_features(ntk_full)
+        
+    def _precompute_eigen_features(self, ntk_full):
+        """
+        Compute eigen decomposition and feature matrices.
+        
+        Parameters
+        ----------
+        ntk_full : torch.Tensor
+            Full NTK matrix [1, n_total, n_train] or [n_total, n_train]
+            
+        Returns
+        -------
+        phi_tr : torch.Tensor
+            Train feature matrix [n_train, d]
+        phi_te : torch.Tensor
+            Test feature matrix [n_test, d]
+        """
+        print("[EigenNTKRegression] Computing eigen decomposition...")
+        t0 = time.time()
+        
+        # Handle shape
+        if ntk_full.ndim == 3:
+            ntk0 = ntk_full[0].detach()
+        else:
+            ntk0 = ntk_full.detach()
+            
+        ntk0 = ntk0.to("cpu", dtype=torch.float64)
+        n_total, n_train = ntk0.shape
+        n_test = n_total - n_train
+        
+        K_trtr = ntk0[:n_train, :].numpy()
+        K_tetr = ntk0[n_train:, :].numpy()
+        K_sym = 0.5 * (K_trtr + K_trtr.T)
+        
+        d = min(self.rank, n_train)
+        
+        # Eigen decomposition
+        if n_train <= 5000 or _eigsh is None:
+            evals, evecs = np.linalg.eigh(K_sym)
+            
+            if self.eigen_decom_mode == "top":
+                idx = np.argsort(evals)[::-1][:d]
+                method = f"dense_eigh(top-{d})"
+            elif self.eigen_decom_mode == "random":
+                # Use separate RandomState to avoid affecting global random state
+                rng = np.random.RandomState(self.seed)
+                idx = rng.choice(len(evals), size=d, replace=False)
+                method = f"dense_eigh(random-{d})"
+            else:
+                raise ValueError(f"Unknown eigen_decom_mode: {self.eigen_decom_mode}")
+            
+            lam = evals[idx]
+            U = evecs[:, idx]
+        else:
+            if self.eigen_decom_mode == "random":
+                # For random mode with large matrix, compute all then select random
+                evals, evecs = np.linalg.eigh(K_sym)
+                rng = np.random.RandomState(self.seed)
+                idx = rng.choice(len(evals), size=d, replace=False)
+                lam = evals[idx]
+                U = evecs[:, idx]
+                method = f"dense_eigh(random-{d})"
+            else:
+                # top mode with sparse solver
+                lam, U = _eigsh(K_sym, k=d, which='LA', tol=1e-4)
+                idx = np.argsort(lam)[::-1]
+                lam = lam[idx]
+                U = U[:, idx]
+                method = f"eigsh(top-{d})"
+        
+        lam = np.clip(lam, 1e-8, None)
+        
+        # Compute feature matrices
+        Phi_tr = U * np.sqrt(lam)[None, :]
+        Phi_te = K_tetr @ (U / np.sqrt(lam)[None, :])
+        
+        print(f"[EigenNTKRegression] Done via {method} (n_train={n_train}, d={d}, d/n_train(%)={d/n_train*100:.2f}%) in {time.time()-t0:.2f}s")
+        
+        # Move to device
+        phi_tr = torch.from_numpy(Phi_tr).to(device=self.device, dtype=self.dtype)
+        phi_te = torch.from_numpy(Phi_te).to(device=self.device, dtype=self.dtype)
+        
+        return phi_tr, phi_te
+    
+    def _robust_cholesky(self, A, base_reg=0.0, max_tries=6, growth=10.0):
+        """Robust Cholesky decomposition with increasing regularization."""
+        device, dtype = A.device, A.dtype
+        n = A.size(0)
+        I = torch.eye(n, device=device, dtype=dtype)
+        reg = float(base_reg)
+        
+        for _ in range(max_tries):
+            L, info = torch.linalg.cholesky_ex(A + reg * I)
+            if info == 0:
+                return L, reg
+            reg = max(1e-12, reg * growth) if reg > 0 else 1e-8
+        
+        # Final attempt
+        reg = max(reg, 1e-2)
+        L, info = torch.linalg.cholesky_ex(A + reg * I)
+        if info != 0:
+            raise RuntimeError("robust_cholesky failed")
+        return L, reg
+    
+    def _ridge_solve(self, PhiS, YS, effective_lam=None):
+        """
+        Solve ridge regression: min_W ||PhiS @ W - YS||^2 + lam * ||W||^2
+        
+        Parameters
+        ----------
+        PhiS : torch.Tensor [m, d]
+        YS : torch.Tensor [m, C]
+        effective_lam : float, optional
+            Override lambda value for adaptive regularization
+        
+        Returns
+        -------
+        W : torch.Tensor [d, C]
+        """
+        lam_to_use = effective_lam if effective_lam is not None else self.lam
+        
+        if self.solver == "lstsq":
+            device, dtype = PhiS.device, PhiS.dtype
+            d = PhiS.size(1)
+            if lam_to_use > 0:
+                sq = torch.as_tensor(lam_to_use, device=device, dtype=dtype).sqrt()
+                A = torch.cat([PhiS, sq * torch.eye(d, device=device, dtype=dtype)], dim=0)
+                Z = torch.cat([YS, torch.zeros(d, YS.size(1), device=device, dtype=dtype)], dim=0)
+            else:
+                A, Z = PhiS, YS
+            return torch.linalg.lstsq(A, Z).solution
+        
+        # Cholesky solver
+        d = PhiS.size(1)
+        B = PhiS.T @ PhiS
+        RHS = PhiS.T @ YS
+        
+        try:
+            L, used_reg = self._robust_cholesky(B, base_reg=lam_to_use)
+            return torch.cholesky_solve(RHS, L)
+        except Exception as e:
+            print(f"[WARN] Cholesky failed ({e}); fallback to lstsq")
+            device, dtype = PhiS.device, PhiS.dtype
+            if lam_to_use > 0:
+                sq = torch.as_tensor(lam_to_use, device=device, dtype=dtype).sqrt()
+                A = torch.cat([PhiS, sq * torch.eye(d, device=device, dtype=dtype)], dim=0)
+                Z = torch.cat([YS, torch.zeros(d, YS.size(1), device=device, dtype=dtype)], dim=0)
+            else:
+                A, Z = PhiS, YS
+            return torch.linalg.lstsq(A, Z).solution
+    
+    def forward(self, train_indices):
+        """
+        Perform kernel ridge regression on subset of training data.
+        
+        Parameters
+        ----------
+        train_indices : numpy.ndarray or list
+            Indices of training samples to use
+            
+        Returns
+        -------
+        test_preds : torch.Tensor [n_test, n_class]
+            Predictions on test set
+        """
+        idx_t = torch.as_tensor(train_indices, device=self.device, dtype=torch.long)
+        
+        PhiS = self.phi_tr.index_select(0, idx_t)
+        yS = self.y[train_indices].to(device=self.device, dtype=torch.long)
+        
+        # One-hot encoding
+        YS = torch.nn.functional.one_hot(yS, num_classes=self.n_class).to(dtype=self.dtype)
+        
+        # Use constant lambda (no adaptive regularization)
+        effective_lam = self.lam
+        
+        # Solve ridge regression
+        W = self._ridge_solve(PhiS, YS, effective_lam=effective_lam)
+        
+        # Predict on test set
+        test_preds = (self.phi_te @ W).to('cpu')
+        
+        return test_preds
+
 
 ################################### Kernel regression with Dynamic Programming INVerse ################################
 class shapleyNTKRegression(nn.Module):
     def __init__(self, k_train, y, n_class, pre_inv=None):
+        # print(f'[DEBUG] vinfo/entks/ntk_regression.py """shapleyNTKRegression"""')
+        # print(f'k_train: {k_train.shape}')
+        # print(f'y: {y.shape}')
+        # print(f'n_class: {n_class}')
+        # print(f'pre_inv: {pre_inv}')
         """
         Parameters
         ----------
@@ -39,6 +277,7 @@ class shapleyNTKRegression(nn.Module):
     def forward(self, k_test, return_inv=False):
         preds = []
         for i in range(self.n_class):
+            # print(f'[DEBUG] i: {i}')
             yi = torch.clone(self.y)
             yi[self.y==i] = 1
             yi[self.y!=i] = 0
@@ -62,7 +301,7 @@ class shapleyNTKRegression(nn.Module):
                                torch.inverse(D_minus_CA_invB)), dim=1)
                 ), dim=0)
                 beta_i = P @ yi
-            else:
+            else: # 여기
                 # solve linear systems
                 if self.single_kernel:
                     beta_i = torch.linalg.solve(self.k_train[0], yi)
@@ -75,6 +314,7 @@ class shapleyNTKRegression(nn.Module):
                 pred_i = k_test[i].double() @ beta_i
             preds.append(pred_i)
         y_pred = torch.stack(preds, dim=1)
+        # print(f'y_pred: {y_pred.shape}')
         if return_inv:
             if self.pre_inv is not None:
                 return y_pred, P
