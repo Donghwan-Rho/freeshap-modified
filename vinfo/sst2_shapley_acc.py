@@ -31,7 +31,7 @@ def parse_args():
                         help="Lambda (regularization parameter) for eigen regression")
     parser.add_argument("--num_train_selected", type=int, default=100)
     parser.add_argument("--num_train_selected_list", type=int, nargs='+', 
-                        default=[2*i for i in range(1, 51)],
+                        default=[i for i in range(1, 101)],
                         help="List of percentages (1-100) of num_train_dp to use as training data")
     return parser.parse_args()
 
@@ -66,9 +66,11 @@ def main():
     yaml_path = "../configs/dshap/sst2/ntk_prompt.yaml"
     file_path = "./freeshap_res/"
 
-    # seed 고정
+    # seed 고정 (재현성 보장)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # 모든 GPU 시드 고정
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False  # cuDNN 최적화 비활성화
     np.random.seed(seed)
     random.seed(seed)
 

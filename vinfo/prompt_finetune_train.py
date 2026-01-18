@@ -13,6 +13,16 @@ from tqdm import tqdm
 import numpy as np
 import argparse
 import os
+import warnings
+import logging
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
+
+# Suppress transformers warnings
+logging.getLogger('transformers').setLevel(logging.ERROR)
+logging.getLogger('transformers.modeling_utils').setLevel(logging.ERROR)
 
 
 class PromptSST2Dataset(Dataset):
@@ -123,12 +133,14 @@ class PromptBERTForSST2(nn.Module):
     
     def print_param_count(self):
         """Print parameter counts"""
-        total_params = sum(p.numel() for p in self.parameters())
-        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        print(f'Total parameters: {total_params:,}')
-        print(f'Trainable parameters: {trainable_params:,}')
-        print(f'Frozen parameters: {total_params - trainable_params:,}')
-        print(f'Trainable ratio: {trainable_params/total_params*100:.2f}%')
+        # Suppress output in sweep mode
+        return
+        # total_params = sum(p.numel() for p in self.parameters())
+        # trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        # print(f'Total parameters: {total_params:,}')
+        # print(f'Trainable parameters: {trainable_params:,}')
+        # print(f'Frozen parameters: {total_params - trainable_params:,}')
+        # print(f'Trainable ratio: {trainable_params/total_params*100:.2f}%')
     
     def forward(self, input_ids, attention_mask, token_type_ids, mask_pos):
         """
@@ -199,7 +211,7 @@ def train_epoch(model, train_loader, optimizer, device, epoch):
     correct = 0
     total = 0
     
-    pbar = tqdm(train_loader, desc=f'Epoch {epoch}')
+    pbar = tqdm(train_loader, desc=f'Epoch {epoch}', disable=True)
     for batch_idx, batch in enumerate(pbar):
         # Move to device
         input_ids = batch['input_ids'].to(device)
@@ -245,7 +257,7 @@ def evaluate(model, val_loader, device):
     total = 0
     
     with torch.no_grad():
-        for batch in tqdm(val_loader, desc='Evaluating'):
+        for batch in tqdm(val_loader, desc='Evaluating', disable=True):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             token_type_ids = batch['token_type_ids'].to(device)
@@ -279,6 +291,10 @@ def main():
                         help='Path to txt file containing train indices (overrides start/end idx)')
     parser.add_argument('--train_data_percentage', type=float, default=100.0,
                         help='Percentage of data to use from indices file (0-100)')
+    parser.add_argument('--sweep_percentages', action='store_true',
+                        help='If set, sweep train_data_percentage from 1 to 100 and save results')
+    parser.add_argument('--sweep_output_file', type=str, default=None,
+                        help='Output file to save sweep results (required if --sweep_percentages is set)')
     parser.add_argument('--batch_size', type=int, default=16,
                         help='Batch size')
     parser.add_argument('--max_epochs', type=int, default=10,
@@ -300,6 +316,57 @@ def main():
     
     args = parser.parse_args()
     
+    # Check if sweep mode is enabled
+    if args.sweep_percentages:
+        if args.train_indices_file is None:
+            raise ValueError("--train_indices_file must be specified when using --sweep_percentages")
+        if args.sweep_output_file is None:
+            raise ValueError("--sweep_output_file must be specified when using --sweep_percentages")
+        
+        print("="*80)
+        print("SWEEP MODE: Running experiments for percentages 1-100%")
+        print("="*80)
+        
+        results = []
+        
+        for pct in range(1, 101):
+            # print(f"\n{'='*80}")
+            # print(f"Experiment {pct}/100: train_data_percentage={pct}%")
+            # print(f"{'='*80}")
+            
+            # Override the percentage argument
+            args.train_data_percentage = float(pct)
+            
+            # Run single experiment
+            final_acc = run_single_experiment(args)
+            
+            # Convert to integer format (multiply by 10000)
+            acc_int = int(round(final_acc * 10000))
+            results.append(acc_int)
+            
+            print(f"Pct {pct}% -> Acc: {acc_int} ({final_acc:.4f})")
+        
+        # Save results to file
+        with open(args.sweep_output_file, 'w') as f:
+            f.write(str(results))
+        
+        print(f"\n{'='*80}")
+        print(f"Completed all 100 experiments!")
+        print(f"Results saved to: {args.sweep_output_file}")
+        print(f"{'='*80}\n")
+        print("Final results:")
+        print(results)
+        
+        return
+    
+    # Normal single-run mode
+    final_acc = run_single_experiment(args)
+    print(f"Final Accuracy: {final_acc:.4f}")
+
+
+def run_single_experiment(args):
+    """Run a single fine-tuning experiment and return final accuracy"""
+    
     # Set random seed
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -309,21 +376,21 @@ def main():
     # Create save directory
     os.makedirs(args.save_dir, exist_ok=True)
     
-    print("="*80)
-    print("Prompt-based Fine-tuning for BERT on SST-2")
-    print("="*80)
-    print(f"Model: {args.model_name}")
-    print(f"Dataset: SST-2")
-    print(f"Training samples: {args.num_train_dp}")
-    print(f"Frozen layers: {args.num_frozen_layers}")
-    print(f"Batch size: {args.batch_size}")
-    print(f"Learning rate: {args.lr}")
-    print(f"Max epochs: {args.max_epochs}")
-    print(f"Device: {args.device}")
-    print("="*80)
+    # print("="*80)
+    # print("Prompt-based Fine-tuning for BERT on SST-2")
+    # print("="*80)
+    # print(f"Model: {args.model_name}")
+    # print(f"Dataset: SST-2")
+    # print(f"Training samples: {args.num_train_dp}")
+    # print(f"Frozen layers: {args.num_frozen_layers}")
+    # print(f"Batch size: {args.batch_size}")
+    # print(f"Learning rate: {args.lr}")
+    # print(f"Max epochs: {args.max_epochs}")
+    # print(f"Device: {args.device}")
+    # print("="*80)
     
     # Load tokenizer
-    print("\n[1/6] Loading tokenizer...")
+    # print("\n[1/6] Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     
     # Get label word IDs
@@ -332,37 +399,37 @@ def main():
         tokenizer.convert_tokens_to_ids("terrible"),  # negative (class 0)
         tokenizer.convert_tokens_to_ids("great")      # positive (class 1)
     ]
-    print(f"Label words: terrible (ID: {label_word_list[0]}), great (ID: {label_word_list[1]})")
+    # print(f"Label words: terrible (ID: {label_word_list[0]}), great (ID: {label_word_list[1]})")
     
     # Load dataset
-    print("\n[2/6] Loading SST-2 dataset...")
+    # print("\n[2/6] Loading SST-2 dataset...")
     dataset = load_dataset("sst2")
     
     # Prepare train set
     if args.train_indices_file is not None:
         # Load indices from file
-        print(f"Loading train indices from: {args.train_indices_file}")
+        # print(f"Loading train indices from: {args.train_indices_file}")
         train_indices = load_indices_from_file(args.train_indices_file)
-        print(f"Loaded {len(train_indices)} indices")
+        # print(f"Loaded {len(train_indices)} indices")
         
         # Apply percentage filter
         if args.train_data_percentage < 100.0:
             num_to_use = int(len(train_indices) * args.train_data_percentage / 100.0)
             train_indices = train_indices[:num_to_use]
-            print(f"Using {args.train_data_percentage}% of data: {len(train_indices)} indices")
+            # print(f"Using {args.train_data_percentage}% of data: {len(train_indices)} indices")
         
         # Select examples by indices
         all_train_examples = list(dataset['train'])
         train_examples = [all_train_examples[idx] for idx in train_indices]
-        print(f"Train examples: {len(train_examples)} (from indices file)")
+        # print(f"Train examples: {len(train_examples)} (from indices file)")
     else:
         # Use index slicing
         train_end_idx = args.train_end_idx if args.train_end_idx is not None else args.num_train_dp
         train_examples = list(dataset['train'])[args.train_start_idx:train_end_idx]
-        print(f"Train examples: {len(train_examples)} (indices {args.train_start_idx}:{train_end_idx})")
+        # print(f"Train examples: {len(train_examples)} (indices {args.train_start_idx}:{train_end_idx})")
     
     val_examples = list(dataset['validation'])
-    print(f"Validation examples: {len(val_examples)}")
+    # print(f"Validation examples: {len(val_examples)}")
     
     # Create datasets
     train_dataset = PromptSST2Dataset(train_examples, tokenizer, label_word_list, args.max_length)
@@ -373,7 +440,7 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
     
     # Create model
-    print("\n[3/6] Creating model...")
+    # print("\n[3/6] Creating model...")
     model = PromptBERTForSST2(
         model_name=args.model_name,
         label_word_list=label_word_list,
@@ -384,23 +451,23 @@ def main():
     model = model.to(device)
     
     # Create optimizer (following FreeShap: Adam with weight_decay)
-    print("\n[4/6] Creating optimizer...")
+    # print("\n[4/6] Creating optimizer...")
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=args.lr,
         weight_decay=args.weight_decay
     )
-    print(f"Optimizer: Adam(lr={args.lr}, weight_decay={args.weight_decay})")
+    # print(f"Optimizer: Adam(lr={args.lr}, weight_decay={args.weight_decay})")
     
     # Training loop
-    print("\n[5/6] Training...")
+    # print("\n[5/6] Training...")
     best_val_acc = 0.0
     best_epoch = 0
     
     for epoch in range(1, args.max_epochs + 1):
-        print(f"\n{'='*80}")
-        print(f"Epoch {epoch}/{args.max_epochs}")
-        print(f"{'='*80}")
+        # print(f"\n{'='*80}")
+        # print(f"Epoch {epoch}/{args.max_epochs}")
+        # print(f"{'='*80}")
         
         # Train
         train_loss, train_acc = train_epoch(model, train_loader, optimizer, device, epoch)
@@ -408,38 +475,40 @@ def main():
         # Evaluate
         val_loss, val_acc = evaluate(model, val_loader, device)
         
-        print(f"\nEpoch {epoch} Results:")
-        print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
-        print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
+        # print(f"\nEpoch {epoch} Results:")
+        # print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
+        # print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
         
-        # Save best model
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            best_epoch = epoch
-            save_path = os.path.join(args.save_dir, 'best_prompt_model.pt')
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'val_acc': val_acc,
-                'val_loss': val_loss,
-            }, save_path)
-            print(f"  ✓ Saved best model (Val Acc: {val_acc:.4f})")
+        # # Save best model
+        # if val_acc > best_val_acc:
+        #     best_val_acc = val_acc
+        #     best_epoch = epoch
+        #     save_path = os.path.join(args.save_dir, 'best_prompt_model.pt')
+        #     torch.save({
+        #         'epoch': epoch,
+        #         'model_state_dict': model.state_dict(),
+        #         'optimizer_state_dict': optimizer.state_dict(),
+        #         'val_acc': val_acc,
+        #         'val_loss': val_loss,
+        #     }, save_path)
+        #     # print(f"  ✓ Saved best model (Val Acc: {val_acc:.4f})")
     
     # Final evaluation
-    print("\n[6/6] Final Evaluation...")
-    print(f"{'='*80}")
-    print(f"Best Validation Accuracy: {best_val_acc:.4f} (Epoch {best_epoch})")
-    print(f"{'='*80}")
+    # print("\n[6/6] Final Evaluation...")
+    # print(f"{'='*80}")
+    # print(f"Best Validation Accuracy: {best_val_acc:.4f} (Epoch {best_epoch})")
+    # print(f"{'='*80}")
     
     # Load best model and evaluate
     # checkpoint = torch.load(os.path.join(args.save_dir, 'best_prompt_model.pt'))
     # model.load_state_dict(checkpoint['model_state_dict'])
     final_loss, final_acc = evaluate(model, val_loader, device)
-    print(f"Final Test Results:")
-    print(f"  Loss: {final_loss:.4f}")
-    print(f"  Accuracy: {final_acc:.4f}")
+    # print(f"Final Test Results:")
+    # print(f"  Loss: {final_loss:.4f}")
+    # print(f"  Accuracy: {final_acc:.4f}")
     # print(f"\nModel saved to: {args.save_dir}/best_prompt_model.pt")
+    
+    return final_acc
 
 
 if __name__ == '__main__':
