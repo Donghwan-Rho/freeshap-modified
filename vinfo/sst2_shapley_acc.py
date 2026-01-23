@@ -26,7 +26,8 @@ def parse_args():
     parser.add_argument("--tmc_seed", type=int, default=2023)
     parser.add_argument("--approximate", type=str, default="inv",
                         choices=["inv", "eigen", "none"])
-    parser.add_argument("--eigen_rank", type=int, default=250)
+    parser.add_argument("--eigen_rank", type=int, default=250,
+                        help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10% of data)")
     parser.add_argument("--lambda_", type=float, default=1e-6,
                         help="Lambda (regularization parameter) for eigen regression")
     parser.add_argument("--num_train_selected", type=int, default=100)
@@ -50,8 +51,12 @@ def main():
     approximate = args.approximate
     num_train_selected = args.num_train_selected
     num_train_selected_list = args.num_train_selected_list
-    eigen_rank = args.eigen_rank
+    eigen_rank_pct = args.eigen_rank  # Now interpreted as percentage of num_dp
     lambda_ = args.lambda_
+    
+    # Calculate actual eigen rank from percentage
+    eigen_rank = int(num_train_dp * eigen_rank_pct / 100)
+    print(f"[info] eigen_rank={eigen_rank_pct}% of num_dp={num_train_dp} -> actual rank={eigen_rank}")
 
     prompt = True
     signgd = False
@@ -64,7 +69,7 @@ def main():
     early_stopping = "True"
 
     yaml_path = "../configs/dshap/sst2/ntk_prompt.yaml"
-    file_path = "./freeshap_res/"
+    base_path = "./freeshap_res/sst2"
 
     # seed 고정 (재현성 보장)
     torch.manual_seed(seed)
@@ -98,6 +103,8 @@ def main():
             dtype=eigen_dtype,
             seed=seed
         )
+    elif approximate == "inv":
+        probe_model.set_inv_params(lam=lambda_)
 
     if signgd:
         probe_model.signgd()
@@ -114,8 +121,8 @@ def main():
 
     # ===== 1) NTK 캐시 로드 (indices도 같이 로드) =====
     ntk_path = (
-        f"{file_path}{dataset_name}_{model_name}"
-        f"_ntk_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
+        f"{base_path}/ntk/{model_name}"
+        f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
     )
     print(f"[info] ntk_path = {ntk_path}")
 
@@ -150,14 +157,21 @@ def main():
     print("len(val_set)   =", len(val_set))
 
     # ===== 3) Shapley 결과 경로 =====
-    extra_tag = ""
+    method_dir = approximate  # 'inv' or 'eigen'
+    
+    # Format lambda in scientific notation for filename (always use 1e-X format)
+    lambda_str = f"{lambda_:.0e}"
+    
     if approximate == "eigen":
-        extra_tag = f"_eig{eigen_rank}_lam{lambda_}_{eigen_solver}_{eigen_dtype}"
+        # Use the percentage value itself (eigen_rank_pct) in filename
+        extra_tag = f"_eig{eigen_rank_pct}_lam{lambda_str}_{eigen_solver}_{eigen_dtype}"
+    else:
+        extra_tag = f"_lam{lambda_str}"
 
     shapley_path = (
-        f"{file_path}{dataset_name}_{model_name}"
-        f"_shapley_result_seed{seed}_num{num_train_dp}_val{val_sample_num}"
-        f"_appro{approximate}{extra_tag}_sign{signgd}_earlystop{early_stopping}"
+        f"{base_path}/shapley/{method_dir}/results/{model_name}"
+        f"_seed{seed}_num{num_train_dp}_val{val_sample_num}"
+        f"{extra_tag}_sign{signgd}_earlystop{early_stopping}"
         f"_tmc{tmc_seed}_iter{tmc_iter}.pkl"
     )
     print(f"[info] shapley_path = {shapley_path}")
@@ -212,8 +226,9 @@ def main():
     sorted_indices = np.argsort(acc_sum_per_train)[::-1]  # 큰 값이 앞
     all_indices = np.arange(len(sampled_idx))
     
-    # Save sorted indices (top to bottom) to txt file
-    indices_txt_path = shapley_path.replace('.pkl', '_indices.txt')
+    # Save sorted indices (top to bottom) to txt file in indices/ directory
+    indices_filename = shapley_path.split('/')[-1].replace('.pkl', '_indices.txt')
+    indices_txt_path = f"{base_path}/shapley/{method_dir}/indices/{indices_filename}"
     # Convert internal indices to original dataset indices
     original_indices = sampled_idx[sorted_indices]
     with open(indices_txt_path, 'w') as f:
