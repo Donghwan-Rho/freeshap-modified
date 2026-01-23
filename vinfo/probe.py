@@ -255,6 +255,9 @@ class NTKProbe(Probe):
         self.eigen_decom_mode = "top"  # 'top' or 'random'
         self.eigen_regression = None  # Will hold EigenNTKRegression instance
         self.eigen_regression_dict = {}  # Cache for different modes
+        
+        # INV mode lambda
+        self.inv_lam = 1e-6  # Default regularization for inv mode
 
     def approximate(self, method='inv'):
         # method: diagonal, inv
@@ -275,6 +278,12 @@ class NTKProbe(Probe):
         # Invalidate cached regression model
         self.eigen_regression = None
         self.eigen_regression_dict = {}
+    
+    def set_inv_params(self, lam: float = 1e-6):
+        """Configure inv regularization parameter."""
+        self.inv_lam = float(lam)
+        # Invalidate cached pre_inv
+        self.pre_inv = None
 
     def invalidate_eigen_cache(self):
         self.eigen_regression = None
@@ -458,7 +467,7 @@ class NTKProbe(Probe):
                 # print(f"elif self.approximate_ntk == 'inv':")
                 if len(train_indices) % 500 == 0:
                     self.pre_inv = None
-                kr_model = shapleyNTKRegression(k_train, y_train, self.num_labels, self.pre_inv)
+                kr_model = shapleyNTKRegression(k_train, y_train, self.num_labels, self.pre_inv, reg=self.inv_lam)
             else:
                 kr_model = NTKRegression(k_train, y_train, self.num_labels)
 
@@ -497,7 +506,7 @@ class NTKProbe(Probe):
         y_train = self.train_labels[train_indices]
 
         if not has_pre_inv:
-            kr_model = shapleyNTKRegression(k_train, y_train, self.num_labels, None)
+            kr_model = shapleyNTKRegression(k_train, y_train, self.num_labels, None, reg=self.inv_lam)
         else:
             kr_model = shapleyNTKRegression(k_train, y_train, self.num_labels, self.pre_inv)
 

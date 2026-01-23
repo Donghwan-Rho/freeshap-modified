@@ -245,7 +245,7 @@ class EigenNTKRegression(nn.Module):
 
 ################################### Kernel regression with Dynamic Programming INVerse ################################
 class shapleyNTKRegression(nn.Module):
-    def __init__(self, k_train, y, n_class, pre_inv=None):
+    def __init__(self, k_train, y, n_class, pre_inv=None, reg=1e-6):
         # print(f'[DEBUG] vinfo/entks/ntk_regression.py """shapleyNTKRegression"""')
         # print(f'k_train: {k_train.shape}')
         # print(f'y: {y.shape}')
@@ -257,16 +257,17 @@ class shapleyNTKRegression(nn.Module):
         k_train
         y
         n_class
-        inv
+        pre_inv
+        reg: regularization parameter (lambda)
         batch_size: checkpoint when less than this compute the exact inverse
                                     greater than this compute the exact inverse only at this position
         """
         super(shapleyNTKRegression, self).__init__()
+        # print(f'[DEBUG] inv mode, reg: {reg}')
         self.y = y.double()
         self.n_class = n_class
         n = k_train.size(1)
         identity = torch.eye(n, device=k_train.device).unsqueeze(0)
-        reg = 1e-6
         self.k_train = k_train + identity * reg
         self.pre_inv = pre_inv
         self.single_kernel = False
