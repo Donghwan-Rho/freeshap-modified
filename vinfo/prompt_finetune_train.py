@@ -279,18 +279,18 @@ def evaluate(model, val_loader, device):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Prompt-based Fine-tuning for BERT on SST-2')
+    parser = argparse.ArgumentParser(description='Prompt-based Fine-tuning for BERT')
     parser.add_argument('--model_name', type=str, default='bert-base-uncased',
                         help='BERT model name')
     
     # Arguments for automatic path construction (matching sst2_shapley_acc.py)
-    parser.add_argument('--dataset_name', type=str, default='sst2',
+    parser.add_argument('--dataset_name', type=str, default='rte',
                         help='Dataset name')
     parser.add_argument('--seed', type=int, default=2023,
                         help='Random seed (also used in file path)')
     parser.add_argument('--num_train_dp', type=int, default=10000,
                         help='Number of training data points')
-    parser.add_argument('--val_sample_num', type=int, default=872,
+    parser.add_argument('--val_sample_num', type=int, default=1066,
                         help='Number of validation samples (for file path)')
     parser.add_argument('--tmc_iter', type=int, default=500,
                         help='TMC iteration count (for file path)')
@@ -310,10 +310,8 @@ def main():
                         help='Path to txt file containing train indices (overrides start/end idx)')
     parser.add_argument('--train_data_percentage', type=float, default=100.0,
                         help='Percentage of data to use from indices file (0-100)')
-    parser.add_argument('--sweep_percentages', action='store_true',
-                        help='If set, sweep train_data_percentage from 1 to 100 and save results')
     parser.add_argument('--sweep_output_file', type=str, default=None,
-                        help='Output file to save sweep results (required if --sweep_percentages is set)')
+                        help='Output file to save sweep results (auto-enabled if sweep params are set)')
     parser.add_argument('--sweep_mode', type=str, default='percentage', choices=['percentage', 'count'],
                         help="Sweep mode: 'percentage' (default, 1-100%%) or 'count' (absolute sample count)")
     parser.add_argument('--sweep_start', type=float, default=None,
@@ -378,19 +376,22 @@ def main():
         )
         print(f"[info] Auto-constructed train_indices_file: {args.train_indices_file}")
     
+    # Check if sweep mode is enabled (if any sweep parameter is specified)
+    sweep_enabled = (args.sweep_start is not None or args.sweep_end is not None or args.sweep_step is not None)
+    
     # Construct sweep_output_file path automatically if needed
-    if args.sweep_percentages and args.sweep_output_file is None:
+    if sweep_enabled and args.sweep_output_file is None:
         # Use pbft_acc directory for output
         base_dir = args.train_indices_file.replace('/indices/', '/pbft_acc/')
         args.sweep_output_file = base_dir.replace('_indices.txt', '_pbft_acc.txt')
         print(f"[info] Auto-constructed sweep_output_file: {args.sweep_output_file}")
     
-    # Check if sweep mode is enabled
-    if args.sweep_percentages:
+    # Execute sweep mode if enabled
+    if sweep_enabled:
         if args.train_indices_file is None:
-            raise ValueError("--train_indices_file must be specified when using --sweep_percentages")
+            raise ValueError("--train_indices_file must be specified when using sweep mode")
         if args.sweep_output_file is None:
-            raise ValueError("--sweep_output_file must be specified when using --sweep_percentages")
+            raise ValueError("--sweep_output_file must be specified when using sweep mode")
         
         # Load full indices to get total count
         full_train_indices = load_indices_from_file(args.train_indices_file)
@@ -486,6 +487,9 @@ def main():
         
         results = []
         
+        # For count mode, track previous num_samples to show newly added labels
+        prev_num_samples = 0
+        
         for idx, value in enumerate(sweep_values, 1):
             if args.sweep_mode == 'percentage':
                 # Percentage mode
@@ -510,9 +514,37 @@ def main():
             if args.sweep_mode == 'percentage':
                 print(f"[{idx:3d}/{len(sweep_values):3d}] Pct {pct:6.2f}% ({num_samples:5d} samples) -> Acc: {acc_int} ({final_acc:.4f})")
             else:
-                print(f"[{idx:3d}/{len(sweep_values):3d}] Count {num_samples:5d} ({pct:6.2f}%) -> Acc: {acc_int} ({final_acc:.4f})")
+                # Count mode: show newly added sample labels
+                newly_added_labels = []
+                if num_samples > prev_num_samples:
+                    # Get labels of newly added samples
+                    from datasets import load_dataset
+                    
+                    # Load dataset based on dataset name
+                    if args.dataset_name == 'sst2':
+                        dataset = load_dataset('sst2')
+                    elif args.dataset_name in ['rte', 'mnli', 'mrpc']:
+                        dataset = load_dataset('glue', args.dataset_name)
+                    elif args.dataset_name == 'mr':
+                        dataset = load_dataset('rotten_tomatoes')
+                    else:
+                        dataset = load_dataset(args.dataset_name)
+                    
+                    all_train_examples = list(dataset['train'])
+                    
+                    for i in range(prev_num_samples, num_samples):
+                        if i < len(full_train_indices):
+                            sample_idx = full_train_indices[i]
+                            if sample_idx < len(all_train_examples):
+                                label = all_train_examples[sample_idx]['label']
+                                newly_added_labels.append(label)
+                
+                labels_str = f" [+{newly_added_labels}]" if newly_added_labels else ""
+                print(f"[{idx:3d}/{len(sweep_values):3d}] Count {num_samples:5d} ({pct:6.2f}%) -> Acc: {acc_int} ({final_acc:.4f}){labels_str}")
+                prev_num_samples = num_samples
         
         # Save results to file
+        os.makedirs(os.path.dirname(args.sweep_output_file), exist_ok=True)
         with open(args.sweep_output_file, 'w') as f:
             f.write(str(results))
         
