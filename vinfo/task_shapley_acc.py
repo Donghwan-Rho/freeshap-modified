@@ -18,15 +18,15 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", type=str, default="sst2")
+    parser.add_argument("--dataset_name", type=str, default="mr")
     parser.add_argument("--seed", type=int, default=2023)
     parser.add_argument("--num_train_dp", type=int, default=1000)
-    parser.add_argument("--val_sample_num", type=int, default=872)
-    parser.add_argument("--tmc_iter", type=int, default=200)
+    parser.add_argument("--val_sample_num", type=int, default=1066)
+    parser.add_argument("--tmc_iter", type=int, default=500)
     parser.add_argument("--tmc_seed", type=int, default=2023)
     parser.add_argument("--approximate", type=str, default="inv",
                         choices=["inv", "eigen", "none"])
-    parser.add_argument("--eigen_rank", type=int, default=250,
+    parser.add_argument("--eigen_rank", type=int, default=30,
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10% of data)")
     parser.add_argument("--lambda_", type=float, default=1e-6,
                         help="Lambda (regularization parameter) for eigen regression")
@@ -68,8 +68,9 @@ def main():
     per_point = True
     early_stopping = "True"
 
-    yaml_path = "../configs/dshap/sst2/ntk_prompt.yaml"
-    base_path = "./freeshap_res/sst2"
+    # Dynamic path construction based on dataset_name
+    yaml_path = f"../configs/dshap/{dataset_name}/ntk_prompt.yaml"
+    base_path = f"./freeshap_res/{dataset_name}"
 
     # seed 고정 (재현성 보장)
     torch.manual_seed(seed)
@@ -211,6 +212,8 @@ def main():
             "sampled_val_idx": sampled_val_idx,
             "args": vars(args),
         }
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(shapley_path), exist_ok=True)
         with open(shapley_path, "wb") as f:
             pickle.dump(result, f)
         print(f"[info] saved Shapley to {shapley_path}")
@@ -231,6 +234,8 @@ def main():
     indices_txt_path = f"{base_path}/shapley/{method_dir}/indices/{indices_filename}"
     # Convert internal indices to original dataset indices
     original_indices = sampled_idx[sorted_indices]
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(indices_txt_path), exist_ok=True)
     with open(indices_txt_path, 'w') as f:
         for idx in original_indices:
             f.write(f"{idx}\n")

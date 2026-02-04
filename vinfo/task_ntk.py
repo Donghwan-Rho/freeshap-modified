@@ -10,7 +10,8 @@ try:
     mp.set_start_method("spawn")
 except RuntimeError:
     pass
-set_sharing_strategy("file_descriptor")
+# Use file_system instead of file_descriptor to avoid "Too many open files" error
+set_sharing_strategy("file_system")
 
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -38,10 +39,11 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", type=str, default="sst2")
+    parser.add_argument("--dataset_name", type=str, default="mr")
     parser.add_argument("--seed", type=int, default=2023)
     parser.add_argument("--num_train_dp", type=int, default=1000)
-    parser.add_argument("--val_sample_num", type=int, default=872)
+    parser.add_argument("--val_sample_num", type=int, default=None,
+                        help="Number of validation samples. If None, use entire validation set.")
     return parser.parse_args()
 
 
@@ -56,9 +58,10 @@ def main():
     prompt = True
     signgd = False
 
-    yaml_path = "../configs/dshap/sst2/ntk_prompt.yaml"
-    file_path = "./freeshap_res/"
-    os.makedirs(file_path, exist_ok=True)
+    # Dynamic path construction based on dataset_name
+    yaml_path = f"../configs/dshap/{dataset_name}/ntk_prompt.yaml"
+    base_path = f"./freeshap_res/{dataset_name}"
+    os.makedirs(base_path, exist_ok=True)
 
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
@@ -92,9 +95,13 @@ def main():
 
     # ===== train subset 샘플링 =====
     train_data = dataset['train']
+    total_train_size = train_data.num_rows
+    print(f'[info] Total train dataset size: {total_train_size}')
+    
     train_data = train_data.map(lambda example, idx: {'idx': idx}, with_indices=True)
     train_data = train_data.shuffle(seed).select(range(min(train_data.num_rows, num_train_dp)))
     sampled_idx = train_data['idx']
+    print(f'[info] Sampled train data: {len(sampled_idx)} samples (from {total_train_size})')
 
     # ===== validation subset 샘플링 =====
     if dataset_name == "mnli":
@@ -103,11 +110,17 @@ def main():
         val_num = dataset['test'].num_rows
     else:
         val_num = dataset['validation'].num_rows
+    
+    print(f'[info] Total validation dataset size: {val_num}')
 
-    if val_sample_num > val_num:
+    # If val_sample_num is None or greater than available, use entire validation set
+    if val_sample_num is None or val_sample_num > val_num:
         sampled_val_idx = np.arange(val_num).tolist()
+        val_sample_num = val_num  # Update for filename consistency
+        print(f"[info] Using entire validation set: {val_sample_num} samples")
     else:
         sampled_val_idx = np.random.choice(np.arange(val_num), val_sample_num, replace=False).tolist()
+        print(f"[info] Using sampled validation set: {val_sample_num} samples")
 
     # ===== 모델 이름 결정 =====
     if 'llama' in probe_model.args['model']:
@@ -120,9 +133,10 @@ def main():
         model_name = 'model'
 
     # ===== NTK 캐시 경로 =====
+    os.makedirs(f"{base_path}/ntk", exist_ok=True)
     ntk_path = (
-        f"{file_path}{dataset_name}_{model_name}"
-        f"_ntk_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
+        f"{base_path}/ntk/{model_name}"
+        f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
     )
     print(f"[info] ntk_path = {ntk_path}")
 
