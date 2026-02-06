@@ -26,27 +26,41 @@ logging.getLogger('transformers').setLevel(logging.ERROR)
 logging.getLogger('transformers.modeling_utils').setLevel(logging.ERROR)
 
 
-class PromptSST2Dataset(Dataset):
+class PromptDataset(Dataset):
     """
-    SST-2 dataset with prompt template applied
-    Template: "*cls**sent_0*_It_was*mask*.*sep+*"
+    Universal prompt dataset for SST2/MR/RTE/MNLI/MRPC
+    Handles both single sentence and sentence pair tasks
     """
-    def __init__(self, examples, tokenizer, label_word_list, max_length=64):
+    def __init__(self, examples, tokenizer, label_word_list, max_length=64, dataset_name='sst2'):
         self.examples = examples
         self.tokenizer = tokenizer
         self.label_word_list = label_word_list
         self.max_length = max_length
+        self.dataset_name = dataset_name
         
     def __len__(self):
         return len(self.examples)
     
     def __getitem__(self, idx):
         example = self.examples[idx]
-        sentence = example['sentence']
         label = example['label']
         
-        # Apply prompt template: "sentence It was [MASK]."
-        prompted_text = f"{sentence} It was {self.tokenizer.mask_token}."
+        # Apply prompt template based on dataset
+        if self.dataset_name == 'sst2':
+            # SST2: "sentence It was [MASK]."
+            sentence = example['sentence']
+            prompted_text = f"{sentence} It was {self.tokenizer.mask_token}."
+        elif self.dataset_name == 'mr':
+            # MR (rotten_tomatoes): "text It was [MASK]."
+            sentence = example['text']  # MR uses 'text' field, not 'sentence'
+            prompted_text = f"{sentence} It was {self.tokenizer.mask_token}."
+        elif self.dataset_name in ['rte', 'mnli', 'mrpc']:
+            # Sentence pair: "sentence1 ? [MASK], sentence2"
+            sentence1 = example['sentence1']
+            sentence2 = example['sentence2']
+            prompted_text = f"{sentence1} ? {self.tokenizer.mask_token}, {sentence2}"
+        else:
+            raise ValueError(f"Unknown dataset_name: {self.dataset_name}")
         
         # Tokenize
         encoded = self.tokenizer(
@@ -72,7 +86,8 @@ class PromptSST2Dataset(Dataset):
 
 class PromptBERTForSST2(nn.Module):
     """
-    BERT with prompt-based fine-tuning for SST-2
+    BERT with prompt-based fine-tuning
+    Supports SST2/MR/RTE/MNLI/MRPC datasets
     Matches FreeShap's PromptFinetuneProbe configuration
     """
     def __init__(self, 
@@ -290,7 +305,7 @@ def main():
                         help='Random seed (also used in file path)')
     parser.add_argument('--num_train_dp', type=int, default=10000,
                         help='Number of training data points')
-    parser.add_argument('--val_sample_num', type=int, default=1066,
+    parser.add_argument('--val_sample_num', type=int, default=1000,
                         help='Number of validation samples (for file path)')
     parser.add_argument('--tmc_iter', type=int, default=500,
                         help='TMC iteration count (for file path)')
@@ -605,8 +620,15 @@ def run_single_experiment(args):
     # print(f"Label words: terrible (ID: {label_word_list[0]}), great (ID: {label_word_list[1]})")
     
     # Load dataset
-    # print("\n[2/6] Loading SST-2 dataset...")
-    dataset = load_dataset("sst2")
+    # print("\n[2/6] Loading dataset...")
+    if args.dataset_name == 'sst2':
+        dataset = load_dataset('sst2')
+    elif args.dataset_name in ['rte', 'mnli', 'mrpc']:
+        dataset = load_dataset('glue', args.dataset_name)
+    elif args.dataset_name == 'mr':
+        dataset = load_dataset('rotten_tomatoes')
+    else:
+        dataset = load_dataset(args.dataset_name)
     
     # Prepare train set
     if args.train_indices_file is not None:
@@ -640,8 +662,8 @@ def run_single_experiment(args):
     # print(f"Validation examples: {len(val_examples)}")
     
     # Create datasets
-    train_dataset = PromptSST2Dataset(train_examples, tokenizer, label_word_list, args.max_length)
-    val_dataset = PromptSST2Dataset(val_examples, tokenizer, label_word_list, args.max_length)
+    train_dataset = PromptDataset(train_examples, tokenizer, label_word_list, args.max_length, args.dataset_name)
+    val_dataset = PromptDataset(val_examples, tokenizer, label_word_list, args.max_length, args.dataset_name)
     
     # Create generator for reproducible shuffling
     g = torch.Generator()

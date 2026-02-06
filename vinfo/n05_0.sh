@@ -1,0 +1,3 @@
+#!/bin/sh
+CUDA_VISIBLE_DEVICES=0,1,2,3 python prompt_finetune_train.py --dataset_name rte --num_train_dp 2000 --val_sample_num 277 --approximate inv --lambda_ 1e-6 --sweep_mode percentage --sweep_start 1 --sweep_end 100 --sweep_step 1
+CUDA_VISIBLE_DEVICES=0,1,2,3 python prompt_finetune_train.py --dataset_name rte --num_train_dp 2490 --val_sample_num 277 --approximate inv --lambda_ 1e-6 --sweep_mode percentage --sweep_start 1 --sweep_end 100 --sweep_step 1

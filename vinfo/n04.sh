@@ -1,0 +1,3 @@
+#!/bin/sh
+python prompt_finetune_train.py --dataset_name mrpc --num_train_dp 2000 --val_sample_num 408 --approximate inv --lambda_ 1e-6 --sweep_mode percentage --sweep_start 1 --sweep_end 100 --sweep_step 1
+python prompt_finetune_train.py --dataset_name mrpc --num_train_dp 3668 --val_sample_num 408 --approximate inv --lambda_ 1e-6 --sweep_mode percentage --sweep_start 1 --sweep_end 100 --sweep_step 1

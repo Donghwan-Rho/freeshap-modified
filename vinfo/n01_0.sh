@@ -1,0 +1,2 @@
+#!/bin/sh
+CUDA_VISIBLE_DEVICES=0 python prompt_finetune_train.py --dataset_name mr --num_train_dp 5000 --val_sample_num 1066 --approximate inv --lambda_ 1e-6 --sweep_mode percentage --sweep_start 1 --sweep_end 100 --sweep_step 1

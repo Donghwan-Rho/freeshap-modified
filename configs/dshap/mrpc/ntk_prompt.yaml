@@ -25,7 +25,7 @@ probe_com: !NTKProbe &id_probe_com
     savedir: ./ntks
     logdir: null
     workers_per_device: 1
-    grad_chunksize: 10000000 # adjust this value if memory is insufficient
+    grad_chunksize: 1000000 # adjust this value if memory is insufficient
     mm_col_chunksize: 20000
     loader_batch_size: 16  # adjust this value if memory is insufficient
     loader_num_workers: 1   # when memory is pinned, don't set this to non-zero values
