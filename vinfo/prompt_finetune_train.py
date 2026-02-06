@@ -616,13 +616,43 @@ def run_single_experiment(args):
     # print("\n[1/6] Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     
-    # Get label word IDs
-    # Following FreeShap config: {'0':'terrible','1':'great'}
-    label_word_list = [
-        tokenizer.convert_tokens_to_ids("terrible"),  # negative (class 0)
-        tokenizer.convert_tokens_to_ids("great")      # positive (class 1)
-    ]
-    # print(f"Label words: terrible (ID: {label_word_list[0]}), great (ID: {label_word_list[1]})")
+    # Get label word IDs and num_labels based on dataset
+    # Following FreeShap config mappings from YAML files
+    if args.dataset_name in ['sst2', 'mr']:
+        # SST2: {'0':'terrible','1':'great'}
+        # MR: {0:'terrible',1:'great'}
+        label_word_list = [
+            tokenizer.convert_tokens_to_ids("terrible"),  # class 0 (negative)
+            tokenizer.convert_tokens_to_ids("great")      # class 1 (positive)
+        ]
+        num_labels = 2
+    elif args.dataset_name == 'rte':
+        # RTE: Following YAML config - {'entailment':'Yes', 'not_entailment':'No'}
+        # GLUE RTE: label 0=entailment, 1=not_entailment
+        # So: label 0 → Yes, label 1 → No
+        label_word_list = [
+            tokenizer.convert_tokens_to_ids("Yes"),  # class 0 (entailment)
+            tokenizer.convert_tokens_to_ids("No")    # class 1 (not_entailment)
+        ]
+        num_labels = 2
+    elif args.dataset_name == 'mrpc':
+        # MRPC: {'0':'No','1':'Yes'}
+        label_word_list = [
+            tokenizer.convert_tokens_to_ids("No"),   # class 0 (not paraphrase)
+            tokenizer.convert_tokens_to_ids("Yes")   # class 1 (paraphrase)
+        ]
+        num_labels = 2
+    elif args.dataset_name == 'mnli':
+        # MNLI: {'entailment':'Yes', 'neutral':'Maybe', 'contradiction':'No'}
+        label_word_list = [
+            tokenizer.convert_tokens_to_ids("Yes"),    # class 0 (entailment)
+            tokenizer.convert_tokens_to_ids("Maybe"),  # class 1 (neutral)
+            tokenizer.convert_tokens_to_ids("No")      # class 2 (contradiction)
+        ]
+        num_labels = 3
+    else:
+        raise ValueError(f"Unknown dataset: {args.dataset_name}")
+    # print(f"Label words: {label_word_list}, num_labels: {num_labels}")
     
     # Load dataset
     # print("\n[2/6] Loading dataset...")
@@ -693,7 +723,7 @@ def run_single_experiment(args):
         model_name=args.model_name,
         label_word_list=label_word_list,
         num_frozen_layers=args.num_frozen_layers,
-        num_labels=2
+        num_labels=num_labels
     )
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
