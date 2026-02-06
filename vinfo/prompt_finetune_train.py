@@ -658,7 +658,11 @@ def run_single_experiment(args):
         train_examples = list(dataset['train'])[args.train_start_idx:train_end_idx]
         # print(f"Train examples: {len(train_examples)} (indices {args.train_start_idx}:{train_end_idx})")
     
-    val_examples = list(dataset['validation'])
+    # Handle validation split naming differences
+    if args.dataset_name == 'mnli':
+        val_examples = list(dataset['validation_matched'])  # MNLI uses 'validation_matched'
+    else:
+        val_examples = list(dataset['validation'])
     # print(f"Validation examples: {len(val_examples)}")
     
     # Create datasets
