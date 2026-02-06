@@ -54,11 +54,16 @@ class PromptDataset(Dataset):
             # MR (rotten_tomatoes): "text It was [MASK]."
             sentence = example['text']  # MR uses 'text' field, not 'sentence'
             prompted_text = f"{sentence} It was {self.tokenizer.mask_token}."
-        elif self.dataset_name in ['rte', 'mnli', 'mrpc']:
-            # Sentence pair: "sentence1 ? [MASK], sentence2"
+        elif self.dataset_name in ['rte', 'mrpc']:
+            # RTE/MRPC: "sentence1 ? [MASK], sentence2"
             sentence1 = example['sentence1']
             sentence2 = example['sentence2']
             prompted_text = f"{sentence1} ? {self.tokenizer.mask_token}, {sentence2}"
+        elif self.dataset_name == 'mnli':
+            # MNLI uses 'premise' and 'hypothesis' instead of 'sentence1' and 'sentence2'
+            premise = example['premise']
+            hypothesis = example['hypothesis']
+            prompted_text = f"{premise} ? {self.tokenizer.mask_token}, {hypothesis}"
         else:
             raise ValueError(f"Unknown dataset_name: {self.dataset_name}")
         
