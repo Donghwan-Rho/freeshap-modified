@@ -263,13 +263,11 @@ class shapleyNTKRegression(nn.Module):
                                     greater than this compute the exact inverse only at this position
         """
         super(shapleyNTKRegression, self).__init__()
+        # print(f'[DEBUG] inv mode, reg: {reg}')
         self.y = y.double()
         self.n_class = n_class
         n = k_train.size(1)
         identity = torch.eye(n, device=k_train.device).unsqueeze(0)
-        # Add regularization: K_reg = K + lambda * I
-        # Note: inv mode is less sensitive to lambda than eigen mode
-        # because it uses full matrix inversion rather than top-k eigenvalues
         self.k_train = k_train + identity * reg
         self.pre_inv = pre_inv
         self.single_kernel = False
