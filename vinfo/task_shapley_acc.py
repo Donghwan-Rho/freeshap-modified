@@ -18,10 +18,10 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", type=str, default="mnli")
+    parser.add_argument("--dataset_name", type=str, default="mr")
     parser.add_argument("--seed", type=int, default=2023)
-    parser.add_argument("--num_train_dp", type=int, default=1000)
-    parser.add_argument("--val_sample_num", type=int, default=1000)
+    parser.add_argument("--num_train_dp", type=int, default=8530)
+    parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
     parser.add_argument("--tmc_seed", type=int, default=2023)
     parser.add_argument("--approximate", type=str, default="inv",
