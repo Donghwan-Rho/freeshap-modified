@@ -90,6 +90,10 @@ def main():
         dataset = load_dataset("glue", "mnli")
     elif dataset_name == "mrpc":
         dataset = load_dataset("glue", "mrpc")
+    elif dataset_name == "qqp":
+        dataset = load_dataset("glue", "qqp")
+    elif dataset_name == "ag_news":
+        dataset = load_dataset("ag_news")
     else:
         raise ValueError(f"unknown dataset_name={dataset_name}")
 

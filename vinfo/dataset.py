@@ -423,6 +423,8 @@ class EasyReader(Loader):
       dataset = load_dataset("hans", split=split_string)
     elif self.dataset_name == "mrpc":
       dataset = load_dataset("glue", "mrpc", split=split_string)
+    elif self.dataset_name == "qqp":
+      dataset = load_dataset("glue", "qqp", split=split_string)
 
     if split_string == "train":
       dataset = dataset.map(lambda example, idx: {'idx': idx}, with_indices=True)
@@ -491,6 +493,12 @@ class EasyReader(Loader):
           yield data['sentence1'], data['sentence2'], 1 - data['label']
         else:
           yield data['sentence1'], data['sentence2'], data['label']
+    elif self.dataset_name == "qqp":
+      for data in dataset:
+        if data_poison and data['idx'] in indices_to_flip:
+          yield data['question1'], data['question2'], 1 - data['label']
+        else:
+          yield data['question1'], data['question2'], data['label']
 
 
 class FastListDataset(Dataset, InitYAMLObject):
