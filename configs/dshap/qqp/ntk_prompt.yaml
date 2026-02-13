@@ -1,36 +1,34 @@
 disk_reader: !EasyReader &id_disk_reader
   args:
-    dataset_name: mnli
+    dataset_name: qqp
 
 dataset: !FastListDataset &id_dataset
   args:
     device: cuda:0
     batchsize: 16
-#    model_string: roberta-base
     model_string: bert-base-uncased
-    seq_len: 256
+    seq_len: 128
   data_loader: *id_disk_reader
   prompt: True
-  mapping: "{'entailment':'Yes', 'neutral':'Maybe', 'contradiction':'No'}"
-  template: "*cls**sent-_0*?*mask*,*+sentl_1**sep+*"
-  first_sent_limit: 240
+  mapping: "{'0':'No','1':'Yes'}"
+  template: "*cls**sent_0*?*mask*,*+sentl_1**sep+*"
+  first_sent_limit: 120
 
 probe_com: !NTKProbe &id_probe_com
   args:
     device: cuda:0
     seed: 2023
-    dataset: mnli
-#    model: roberta-base # bert-base-uncased
+    dataset: qqp
     model: bert-base-uncased
     datadir: ./datasets
     savedir: ./ntks
     logdir: null
     workers_per_device: 1
-    grad_chunksize: 1000000 # adjust this value if memory is insufficient
+    grad_chunksize: 1000000
     mm_col_chunksize: 20000
-    loader_batch_size: 16  # adjust this value if memory is insufficient
-    loader_num_workers: 1   # when memory is pinned, don't set this to non-zero values
-    pin_memory: False # setting it to true will cause cpu to stuck at termination (might have a fix though)
+    loader_batch_size: 16
+    loader_num_workers: 1
+    pin_memory: False
     allow_tf32: False
     benchmark: False
     deterministic: True
@@ -40,7 +38,7 @@ probe_com: !NTKProbe &id_probe_com
     prompt: True
     correction: False
     single_kernel: True
-  num_labels: 3
+  num_labels: 2
 
 dshap_com: !Fast_Data_Shapley
   dataset: *id_dataset

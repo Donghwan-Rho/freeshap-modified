@@ -1,0 +1,2 @@
+#!/bin/sh
+CUDA_VISIBLE_DEVICES=2,3 python prompt_finetune_train.py --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000 --approximate eigen --eigen_rank 30 --lambda_ 1e-2 --sweep_mode percentage --sweep_start 1 --sweep_end 100 --sweep_step 1

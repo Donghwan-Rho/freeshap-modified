@@ -54,16 +54,25 @@ class PromptDataset(Dataset):
             # MR (rotten_tomatoes): "text It was [MASK]."
             sentence = example['text']  # MR uses 'text' field, not 'sentence'
             prompted_text = f"{sentence} It was {self.tokenizer.mask_token}."
-        elif self.dataset_name in ['rte', 'mrpc']:
-            # RTE/MRPC: "sentence1 ? [MASK], sentence2"
-            sentence1 = example['sentence1']
-            sentence2 = example['sentence2']
+        elif self.dataset_name in ['rte', 'mrpc', 'qqp']:
+            # RTE/MRPC/QQP: "sentence1 ? [MASK], sentence2"
+            # QQP uses 'question1' and 'question2' fields
+            if self.dataset_name == 'qqp':
+                sentence1 = example['question1']
+                sentence2 = example['question2']
+            else:
+                sentence1 = example['sentence1']
+                sentence2 = example['sentence2']
             prompted_text = f"{sentence1} ? {self.tokenizer.mask_token}, {sentence2}"
         elif self.dataset_name == 'mnli':
             # MNLI uses 'premise' and 'hypothesis' instead of 'sentence1' and 'sentence2'
             premise = example['premise']
             hypothesis = example['hypothesis']
             prompted_text = f"{premise} ? {self.tokenizer.mask_token}, {hypothesis}"
+        elif self.dataset_name == 'ag_news':
+            # AG News: "text This is about [MASK]."
+            text = example['text']
+            prompted_text = f"{text} This is about {self.tokenizer.mask_token}."
         else:
             raise ValueError(f"Unknown dataset_name: {self.dataset_name}")
         
@@ -642,6 +651,13 @@ def run_single_experiment(args):
             tokenizer.convert_tokens_to_ids("Yes")   # class 1 (paraphrase)
         ]
         num_labels = 2
+    elif args.dataset_name == 'qqp':
+        # QQP: {'0':'No','1':'Yes'} - duplicate detection
+        label_word_list = [
+            tokenizer.convert_tokens_to_ids("No"),   # class 0 (not duplicate)
+            tokenizer.convert_tokens_to_ids("Yes")   # class 1 (duplicate)
+        ]
+        num_labels = 2
     elif args.dataset_name == 'mnli':
         # MNLI: {'entailment':'Yes', 'neutral':'Maybe', 'contradiction':'No'}
         label_word_list = [
@@ -650,6 +666,15 @@ def run_single_experiment(args):
             tokenizer.convert_tokens_to_ids("No")      # class 2 (contradiction)
         ]
         num_labels = 3
+    elif args.dataset_name == 'ag_news':
+        # AG News: 4 classes - World (0), Sports (1), Business (2), Sci/Tech (3)
+        label_word_list = [
+            tokenizer.convert_tokens_to_ids("World"),      # class 0
+            tokenizer.convert_tokens_to_ids("Sports"),     # class 1
+            tokenizer.convert_tokens_to_ids("Business"),   # class 2
+            tokenizer.convert_tokens_to_ids("Technology")  # class 3 (Sci/Tech)
+        ]
+        num_labels = 4
     else:
         raise ValueError(f"Unknown dataset: {args.dataset_name}")
     # print(f"Label words: {label_word_list}, num_labels: {num_labels}")
@@ -658,10 +683,12 @@ def run_single_experiment(args):
     # print("\n[2/6] Loading dataset...")
     if args.dataset_name == 'sst2':
         dataset = load_dataset('sst2')
-    elif args.dataset_name in ['rte', 'mnli', 'mrpc']:
+    elif args.dataset_name in ['rte', 'mnli', 'mrpc', 'qqp']:
         dataset = load_dataset('glue', args.dataset_name)
     elif args.dataset_name == 'mr':
         dataset = load_dataset('rotten_tomatoes')
+    elif args.dataset_name == 'ag_news':
+        dataset = load_dataset('ag_news')
     else:
         dataset = load_dataset(args.dataset_name)
     
@@ -696,6 +723,8 @@ def run_single_experiment(args):
     # Handle validation split naming differences
     if args.dataset_name == 'mnli':
         val_examples = list(dataset['validation_matched'])  # MNLI uses 'validation_matched'
+    elif args.dataset_name == 'ag_news':
+        val_examples = list(dataset['test'])  # AG News uses 'test' as validation
     else:
         val_examples = list(dataset['validation'])
     # print(f"Validation examples: {len(val_examples)}")
