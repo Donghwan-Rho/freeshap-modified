@@ -4,6 +4,7 @@ import yaml
 import torch
 import random
 from datasets import load_dataset
+import time
 
 import sys, os
 sys.path.insert(0, './lmntk')
@@ -53,6 +54,9 @@ def main():
     num_train_selected_list = args.num_train_selected_list
     eigen_rank_pct = args.eigen_rank  # Now interpreted as percentage of num_dp
     lambda_ = args.lambda_
+    
+    # Initialize timing info dictionary
+    timing_info = {}
     
     # Calculate actual eigen rank from percentage
     eigen_rank = int(num_train_dp * eigen_rank_pct / 100)
@@ -152,7 +156,20 @@ def main():
     # eigen이면 feature 준비 (train labels 설정 후에 호출해야 함)
     if approximate == "eigen":
         print("[info] Preparing eigen regression features...")
+        import time as time_module
+        eigen_start_time = time_module.time()
         probe_model.prepare_eigen_regression()
+        eigen_total_time = time_module.time() - eigen_start_time
+        
+        # Get eigendecomposition time from the regression model
+        if hasattr(probe_model, 'eigen_regression') and probe_model.eigen_regression is not None:
+            eigendecom_time = probe_model.eigen_regression.eigen_decomposition_time
+            timing_info['eigendecomposition'] = eigendecom_time
+            timing_info['eigen_preparation_total'] = eigen_total_time
+            timing_info['eigen_preparation_overhead'] = eigen_total_time - eigendecom_time
+            print(f"[TIMING] Eigendecomposition time: {eigendecom_time:.4f}s")
+            print(f"[TIMING] Total eigen preparation time: {eigen_total_time:.4f}s")
+            print(f"[TIMING] Overhead (non-decomposition): {eigen_total_time - eigendecom_time:.4f}s")
 
     print("len(train_set) =", len(train_set))
     print("len(val_set)   =", len(val_set))
@@ -176,8 +193,9 @@ def main():
         f"_tmc{tmc_seed}_iter{tmc_iter}.pkl"
     )
     print(f"[info] shapley_path = {shapley_path}")
-
+    
     # ===== 4) Shapley 로드 or 계산 =====
+    shapley_computation_time = None
     try:
         with open(shapley_path, "rb") as f:
             result = pickle.load(f)
@@ -188,10 +206,17 @@ def main():
             sampled_idx = np.array(result["sampled_idx"])
         if "sampled_val_idx" in result:
             sampled_val_idx = np.array(result["sampled_val_idx"])
+        
+        # Load timing info if available
+        if "timing_info" in result:
+            timing_info = result["timing_info"]
+            print(f"[info] loaded timing info from cache: {timing_info}")
 
     except Exception as e:
         print("[info] shapley cache miss -> computing Shapley")
         print(f"[info] reason: {e}")
+        
+        shapley_start_time = time.time()
 
         dv_result = dshap_com.run(
             data_idx=sampled_idx.tolist(),
@@ -205,12 +230,17 @@ def main():
             per_point=per_point,
             early_stopping=early_stopping
         )
+        
+        shapley_computation_time = time.time() - shapley_start_time
+        timing_info['shapley_computation'] = shapley_computation_time
+        print(f"[TIMING] Shapley computation time: {shapley_computation_time:.4f}s")
 
         result = {
             "dv_result": dv_result,
             "sampled_idx": sampled_idx,
             "sampled_val_idx": sampled_val_idx,
             "args": vars(args),
+            "timing_info": timing_info,
         }
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(shapley_path), exist_ok=True)
@@ -320,5 +350,25 @@ def main():
         print(f"top: {top_results}")
         # print(f"bottom: {bottom_results}")
         print(f"random: {random_results}")
+    
+    # ===== Print timing summary =====
+    if timing_info:
+        print("\n" + "="*80)
+        print("TIMING SUMMARY")
+        print("="*80)
+        for key, value in timing_info.items():
+            print(f"{key:.<40} {value:.4f}s")
+        print("="*80 + "\n")
+        
+        # Save timing info to a separate log file
+        timing_log_path = shapley_path.replace('.pkl', '_timing.txt')
+        with open(timing_log_path, 'w') as f:
+            f.write("TIMING SUMMARY\n")
+            f.write("="*80 + "\n")
+            for key, value in timing_info.items():
+                f.write(f"{key}: {value:.4f}s\n")
+            f.write("="*80 + "\n")
+        print(f"[info] saved timing info to {timing_log_path}")
+
 if __name__ == "__main__":
     main()

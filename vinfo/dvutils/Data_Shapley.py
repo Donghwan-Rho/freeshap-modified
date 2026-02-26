@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 from torch.multiprocessing import Pool, Process, set_start_method
 from multiprocessing import Pool
+import time
 
 from dvutils.Adpt_Shapley import Adpt_Shapley
 from dvutils.utils import merge_dataloaders, powerset, softmax
@@ -174,6 +175,8 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         self.ac_cache.append(np.copy(tmp_inspect))
         _tmc_compute(idxs=idxs, marginal_contribs=marginal_contribs)
         self.probe_model.pre_inv = None
+        if hasattr(self.probe_model, 'eigen_regression') and self.probe_model.eigen_regression is not None:
+            self.probe_model.eigen_regression.reset_cache()
         return idxs, marginal_contribs
 
     def tmc_one_iteration_per_point(self, early_stopping=False, tolerance=0.05):
@@ -217,6 +220,8 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
 
         _tmc_compute(idxs=idxs, marginal_contribs=marginal_contribs)
         self.probe_model.pre_inv = None
+        if hasattr(self.probe_model, 'eigen_regression') and self.probe_model.eigen_regression is not None:
+            self.probe_model.eigen_regression.reset_cache()
 
     def get_null_score(self):
         try:
@@ -237,6 +242,8 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
             v_entropy, acc = self.probe_model.kernel_regression(selected_idx, self.val_set)
             self.full_score = np.array([-v_entropy, acc])
         self.probe_model.pre_inv = None
+        if hasattr(self.probe_model, 'eigen_regression') and self.probe_model.eigen_regression is not None:
+            self.probe_model.eigen_regression.reset_cache()
         return self.full_score
 
     def get_null_score_per_point(self):
@@ -335,8 +342,26 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
 
             # ===== NEW: eigen features precompute (딱 1번) =====
             if getattr(self.probe_model, "approximate_ntk", None) == "eigen":
-                # print("[DEBUG] Fast_Data_Shapley.run: prepare eigen features once before TMC loop")
-                self.probe_model.prepare_eigen_regression()
+                # Check if already cached
+                mode_key = getattr(self.probe_model, 'eigen_decom_mode', 'top')
+                already_cached = (hasattr(self.probe_model, 'eigen_regression_dict') and 
+                                 mode_key in self.probe_model.eigen_regression_dict)
+                
+                if already_cached:
+                    print(f"[Fast_Data_Shapley] Using cached eigen regression (mode={mode_key})")
+                    self.probe_model.prepare_eigen_regression()
+                else:
+                    print("[Fast_Data_Shapley] Preparing eigen regression features before TMC loop...")
+                    eigen_start = time.time()
+                    self.probe_model.prepare_eigen_regression()
+                    eigen_total = time.time() - eigen_start
+                    
+                    # Get eigendecomposition time from the regression model
+                    if hasattr(self.probe_model, 'eigen_regression') and self.probe_model.eigen_regression is not None:
+                        eigendecom_time = self.probe_model.eigen_regression.eigen_decomposition_time
+                        print(f"[TIMING] Eigendecomposition time: {eigendecom_time:.4f}s")
+                        print(f"[TIMING] Total eigen preparation time: {eigen_total:.4f}s")
+                        print(f"[TIMING] Overhead (non-decomposition): {eigen_total - eigendecom_time:.4f}s")
 
             full_score = self.get_full_score()
             # print(f"full_score: {full_score}")
@@ -965,6 +990,8 @@ class Fast_Linear_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         self.ac_cache.append(np.copy(tmp_inspect))
         _tmc_compute(idxs=idxs, marginal_contribs=marginal_contribs)
         self.probe_model.pre_inv = None
+        if hasattr(self.probe_model, 'eigen_regression') and self.probe_model.eigen_regression is not None:
+            self.probe_model.eigen_regression.reset_cache()
         return idxs, marginal_contribs
 
     def tmc_one_iteration_idx(self, target_idx=0):
@@ -1027,6 +1054,8 @@ class Fast_Linear_Data_Shapley(Adpt_Shapley, InitYAMLObject):
             v_entropy, acc = self.probe_model.kernel_regression(selected_idx, self.val_set)
             self.full_score = np.array([-v_entropy, acc])
         self.probe_model.pre_inv = None
+        if hasattr(self.probe_model, 'eigen_regression') and self.probe_model.eigen_regression is not None:
+            self.probe_model.eigen_regression.reset_cache()
         return self.full_score
 
     def initialize_linear_kernel(self):

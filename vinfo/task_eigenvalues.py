@@ -110,21 +110,24 @@ def compute_eigenvalues(ntk):
 
 
 def save_plot(eigvals, out_png):
-    positive_mask = eigvals > 0
-    pos_vals = eigvals[positive_mask]
+    total_count = len(eigvals)
+    positive_idx = np.where(eigvals > 0)[0]
+    pos_vals = eigvals[positive_idx]
 
     if len(pos_vals) == 0:
         raise ValueError("No positive eigenvalues found. Cannot draw log-scale plot.")
 
-    x = np.arange(1, len(pos_vals) + 1)
+    # x-axis: top percentage over all eigenvalues
+    x_percent = (positive_idx + 1) / total_count * 100.0
 
     plt.figure(figsize=(10, 6))
-    plt.plot(x, pos_vals, marker='o', markersize=3, linewidth=1.2)
+    plt.plot(x_percent, pos_vals, marker='o', markersize=3, linewidth=1.2)
     plt.yscale('log')
-    plt.xlabel('Eigenvalue Rank')
+    plt.xlabel('Top Eigenvalue Percentage (%)')
     plt.ylabel('Eigenvalue (log scale)')
     plt.title('NTK Eigenvalue Spectrum')
     plt.grid(True, alpha=0.3)
+    plt.xlim(0, 100)
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
     plt.close()

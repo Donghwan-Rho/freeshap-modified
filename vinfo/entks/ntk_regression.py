@@ -56,6 +56,13 @@ class EigenNTKRegression(nn.Module):
         self.eigen_decom_mode = eigen_decom_mode
         self.seed = seed
         
+        # Initialize timing attribute
+        self.eigen_decomposition_time = 0.0
+        
+        # Incremental update cache (Sherman-Morrison)
+        self.cached_B_inv = None
+        self.cached_indices = []
+        
         # Prepare eigen features
         self.phi_tr, self.phi_te = self._precompute_eigen_features(ntk_full)
         
@@ -134,7 +141,11 @@ class EigenNTKRegression(nn.Module):
         Phi_tr = U * np.sqrt(lam)[None, :]
         Phi_te = K_tetr @ (U / np.sqrt(lam)[None, :])
         
-        print(f"[EigenNTKRegression] Done via {method} (n_train={n_train}, d={d}, d/n_train(%)={d/n_train*100:.2f}%) in {time.time()-t0:.2f}s")
+        # Store timing information
+        decomp_time = time.time() - t0
+        self.eigen_decomposition_time = decomp_time
+        print(f"[EigenNTKRegression] Done via {method} (n_train={n_train}, d={d}, d/n_train(%)={d/n_train*100:.2f}%) in {decomp_time:.4f}s")
+        print(f"[EigenNTKRegression] Eigendecomposition time: {decomp_time:.4f}s")
         
         # Move to device
         phi_tr = torch.from_numpy(Phi_tr).to(device=self.device, dtype=self.dtype)
@@ -162,7 +173,7 @@ class EigenNTKRegression(nn.Module):
             raise RuntimeError("robust_cholesky failed")
         return L, reg
     
-    def _ridge_solve(self, PhiS, YS, effective_lam=None):
+    def _ridge_solve(self, PhiS, YS, effective_lam=None, return_cholesky=False):
         """
         Solve ridge regression: min_W ||PhiS @ W - YS||^2 + lam * ||W||^2
         
@@ -172,10 +183,13 @@ class EigenNTKRegression(nn.Module):
         YS : torch.Tensor [m, C]
         effective_lam : float, optional
             Override lambda value for adaptive regularization
+        return_cholesky : bool, optional
+            If True, return (W, L) where L is Cholesky factor of (B + lam*I)
         
         Returns
         -------
         W : torch.Tensor [d, C]
+            or (W, L) if return_cholesky=True
         """
         lam_to_use = effective_lam if effective_lam is not None else self.lam
         
@@ -188,7 +202,10 @@ class EigenNTKRegression(nn.Module):
                 Z = torch.cat([YS, torch.zeros(d, YS.size(1), device=device, dtype=dtype)], dim=0)
             else:
                 A, Z = PhiS, YS
-            return torch.linalg.lstsq(A, Z).solution
+            W = torch.linalg.lstsq(A, Z).solution
+            if return_cholesky:
+                return W, None  # lstsq doesn't use Cholesky
+            return W
         
         # Cholesky solver
         d = PhiS.size(1)
@@ -197,7 +214,10 @@ class EigenNTKRegression(nn.Module):
         
         try:
             L, used_reg = self._robust_cholesky(B, base_reg=lam_to_use)
-            return torch.cholesky_solve(RHS, L)
+            W = torch.cholesky_solve(RHS, L)
+            if return_cholesky:
+                return W, L
+            return W
         except Exception as e:
             print(f"[WARN] Cholesky failed ({e}); fallback to lstsq")
             device, dtype = PhiS.device, PhiS.dtype
@@ -207,11 +227,84 @@ class EigenNTKRegression(nn.Module):
                 Z = torch.cat([YS, torch.zeros(d, YS.size(1), device=device, dtype=dtype)], dim=0)
             else:
                 A, Z = PhiS, YS
-            return torch.linalg.lstsq(A, Z).solution
+            W = torch.linalg.lstsq(A, Z).solution
+            if return_cholesky:
+                return W, None
+            return W
+    
+    def _can_use_cached(self, train_indices):
+        """
+        Check if we can use incremental (Sherman-Morrison) update.
+        
+        Returns True if:
+        1. Cache exists
+        2. Exactly one new sample added
+        3. Previous samples match
+        """
+        if self.cached_B_inv is None or len(self.cached_indices) == 0:
+            return False
+        
+        idx_list = train_indices.tolist() if isinstance(train_indices, np.ndarray) else list(train_indices)
+        
+        # Check if exactly one sample added
+        if len(idx_list) != len(self.cached_indices) + 1:
+            return False
+        
+        # Check if all previous indices match
+        return idx_list[:-1] == self.cached_indices
+    
+    def _sherman_morrison_update(self, B_inv, phi_new):
+        """
+        Update B^{-1} using Sherman-Morrison formula when adding one sample.
+        
+        B_new = B_old + phi_new^T @ phi_new  (rank-1 update)
+        B_new^{-1} = B_old^{-1} - (B_old^{-1} @ u @ u^T @ B_old^{-1}) / (1 + u^T @ B_old^{-1} @ u)
+        
+        where u = phi_new^T [d, 1]
+        
+        Parameters
+        ----------
+        B_inv : torch.Tensor [d, d]
+            Current B^{-1}
+        phi_new : torch.Tensor [1, d]
+            New sample feature vector
+            
+        Returns
+        -------
+        B_inv_new : torch.Tensor [d, d]
+            Updated B^{-1}
+        """
+        # u = phi_new^T [d, 1]
+        u = phi_new.T
+        
+        # B_inv @ u [d, 1]
+        B_inv_u = B_inv @ u
+        
+        # u^T @ B_inv @ u (scalar)
+        denom = 1.0 + (u.T @ B_inv_u).item()
+        
+        # Numerical stability check
+        if abs(denom) < 1e-10:
+            # Denominator too small, fallback to recompute
+            return None
+        
+        # Sherman-Morrison update
+        B_inv_new = B_inv - (B_inv_u @ B_inv_u.T) / denom
+        
+        return B_inv_new
+    
+    def reset_cache(self):
+        """Reset incremental cache. Called at the start of each TMC iteration."""
+        self.cached_B_inv = None
+        self.cached_indices = []
     
     def forward(self, train_indices):
         """
         Perform kernel ridge regression on subset of training data.
+        
+        Adaptive strategy:
+        - If m < d: Use kernel space (m×m inverse)
+        - If m >= d: Use feature space (d×d inverse)
         
         Parameters
         ----------
@@ -231,14 +324,87 @@ class EigenNTKRegression(nn.Module):
         # One-hot encoding
         YS = torch.nn.functional.one_hot(yS, num_classes=self.n_class).to(dtype=self.dtype)
         
-        # Use constant lambda (no adaptive regularization)
         effective_lam = self.lam
         
-        # Solve ridge regression
-        W = self._ridge_solve(PhiS, YS, effective_lam=effective_lam)
+        m, d = PhiS.size()
         
-        # Predict on test set
-        test_preds = (self.phi_te @ W).to('cpu')
+        # Adaptive switching: use kernel space when m < d
+        if m < d:
+            # Kernel space (m×m inverse): O(m³) + O(m²·d)
+            # y_pred = Phi_test @ Phi_S^T @ (K_S,S + λI)^{-1} @ Y_S
+            # where K_S,S = Phi_S @ Phi_S^T
+            K_SS = PhiS @ PhiS.T  # [m, m]
+            
+            try:
+                # Use robust Cholesky (same as feature space)
+                L, used_reg = self._robust_cholesky(K_SS, base_reg=effective_lam)
+                alpha = torch.cholesky_solve(YS, L)
+            except Exception as e:
+                # Fallback to lstsq with augmented system (same as _ridge_solve)
+                print(f"[WARN] Kernel Cholesky failed ({e}); fallback to lstsq (m={m}, d={d})")
+                if effective_lam > 0:
+                    sq = torch.as_tensor(effective_lam, device=self.device, dtype=self.dtype).sqrt()
+                    A = torch.cat([K_SS, sq * torch.eye(m, device=self.device, dtype=self.dtype)], dim=0)
+                    Z = torch.cat([YS, torch.zeros(m, YS.size(1), device=self.device, dtype=self.dtype)], dim=0)
+                else:
+                    A, Z = K_SS, YS
+                alpha = torch.linalg.lstsq(A, Z).solution
+            
+            # Predict: Phi_test @ Phi_S^T @ alpha
+            test_preds = (self.phi_te @ PhiS.T @ alpha).to('cpu')
+        else:
+            # Feature space (d×d inverse): O(m·d²) + O(d³)
+            # Try incremental update if m >= 500 (same as inv mode)
+            use_incremental = (m >= 500) and self._can_use_cached(train_indices)
+            
+            if use_incremental:
+                # Sherman-Morrison incremental update
+                new_idx = train_indices[-1]
+                phi_new = self.phi_tr[new_idx:new_idx+1]  # [1, d]
+                
+                B_inv_new = self._sherman_morrison_update(self.cached_B_inv, phi_new)
+                
+                if B_inv_new is not None:
+                    # Successful incremental update
+                    self.cached_B_inv = B_inv_new
+                    self.cached_indices = train_indices.tolist() if isinstance(train_indices, np.ndarray) else list(train_indices)
+                    
+                    # W = B^{-1} @ Phi_S^T @ Y_S
+                    RHS = PhiS.T @ YS
+                    W = self.cached_B_inv @ RHS
+                    test_preds = (self.phi_te @ W).to('cpu')
+                else:
+                    # Incremental failed, fallback to full solve
+                    use_incremental = False
+            
+            if not use_incremental:
+                # Full solve (no cache or cache invalid)
+                # Cache for next iteration (only when m >= 500 to avoid overhead)
+                if m >= 500:
+                    # Request Cholesky factor to compute B^{-1} without duplicate computation
+                    W, L = self._ridge_solve(PhiS, YS, effective_lam=effective_lam, return_cholesky=True)
+                    
+                    if L is not None:
+                        # Compute B^{-1} using Cholesky factorization
+                        d = PhiS.size(1)
+                        I_d = torch.eye(d, device=self.device, dtype=self.dtype)
+                        try:
+                            B_inv = torch.cholesky_solve(I_d, L)
+                            self.cached_B_inv = B_inv
+                            self.cached_indices = train_indices.tolist() if isinstance(train_indices, np.ndarray) else list(train_indices)
+                        except Exception:
+                            # Failed to compute inverse, disable caching
+                            self.cached_B_inv = None
+                            self.cached_indices = []
+                    else:
+                        # lstsq solver doesn't return L, disable caching
+                        self.cached_B_inv = None
+                        self.cached_indices = []
+                else:
+                    # m < 500, don't cache
+                    W = self._ridge_solve(PhiS, YS, effective_lam=effective_lam)
+                
+                test_preds = (self.phi_te @ W).to('cpu')
         
         return test_preds
 

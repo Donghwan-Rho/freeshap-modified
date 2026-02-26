@@ -1,7 +1,21 @@
 #!/bin/sh
-python task_ntk.py --dataset_name rte --num_train_dp 1000 --val_sample_num 277
-python task_shapley_acc.py --dataset_name rte --num_train_dp 1000 --val_sample_num 277 --approximate inv --lambda_ 1e-5
-python task_shapley_acc.py --dataset_name rte --num_train_dp 1000 --val_sample_num 277 --approximate inv --lambda_ 1e-4
-python task_shapley_acc.py --dataset_name rte --num_train_dp 1000 --val_sample_num 277 --approximate inv --lambda_ 1e-3
-python task_shapley_acc.py --dataset_name rte --num_train_dp 1000 --val_sample_num 277 --approximate inv --lambda_ 1e-2
-python task_shapley_acc.py --dataset_name rte --num_train_dp 1000 --val_sample_num 277 --approximate inv --lambda_ 1e-1
+python task_eigenvalues.py --dataset_name sst2 --num_train_dp 1000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name sst2 --num_train_dp 2000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name sst2 --num_train_dp 5000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name sst2 --num_train_dp 10000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name rte --num_train_dp 1000 --val_sample_num 277
+python task_eigenvalues.py --dataset_name rte --num_train_dp 2000 --val_sample_num 277
+python task_eigenvalues.py --dataset_name rte --num_train_dp 2490 --val_sample_num 277
+python task_eigenvalues.py --dataset_name mrpc --num_train_dp 1000 --val_sample_num 408
+python task_eigenvalues.py --dataset_name mrpc --num_train_dp 2000 --val_sample_num 408
+python task_eigenvalues.py --dataset_name mrpc --num_train_dp 3668 --val_sample_num 408
+python task_eigenvalues.py --dataset_name mr --num_train_dp 1000 --val_sample_num 1066
+python task_eigenvalues.py --dataset_name mr --num_train_dp 2000 --val_sample_num 1066
+python task_eigenvalues.py --dataset_name mr --num_train_dp 5000 --val_sample_num 1066
+python task_eigenvalues.py --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name ag_news --num_train_dp 1000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name ag_news --num_train_dp 2000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name ag_news --num_train_dp 5000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name ag_news --num_train_dp 10000 --val_sample_num 1000
