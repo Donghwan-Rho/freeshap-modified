@@ -70,7 +70,8 @@ def parse_args():
     parser.add_argument("--num_train_dp", type=int, default=8530)
     parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
-    parser.add_argument("--tmc_seed", type=int, default=2023)
+    parser.add_argument("--tmc_seed", type=int, default=None,
+                        help="TMC seed (defaults to same as --seed if not specified)")
     parser.add_argument("--approximate", type=str, default="inv",
                         choices=["inv", "eigen", "none"])
     parser.add_argument("--eigen_rank", type=int, default=30,
@@ -96,7 +97,7 @@ def main():
     val_sample_num = args.val_sample_num
 
     tmc_iter = args.tmc_iter
-    tmc_seed = args.tmc_seed
+    tmc_seed = args.tmc_seed if args.tmc_seed is not None else seed
 
     approximate = args.approximate
     num_train_selected = args.num_train_selected
@@ -253,31 +254,32 @@ def main():
     )
     print(f"[info] shapley_path = {shapley_path}")
     
-    # Setup early stopping log file if enabled
+    # Setup temporary iteration log file if enabled
+    temp_iter_log_path = None
     if log_early_stopping:
         setting_name = os.path.basename(shapley_path).replace('.pkl', '')
-        early_stop_dir = f"{base_path}/shapley/{method_dir}/early_stopping"
-        os.makedirs(early_stop_dir, exist_ok=True)
-        early_stop_path = f"{early_stop_dir}/{setting_name}.txt"
+        prediction_dir = f"{base_path}/shapley/{method_dir}/prediction"
+        os.makedirs(prediction_dir, exist_ok=True)
+        temp_iter_log_path = f"{prediction_dir}/.{setting_name}_iter_temp.txt"
         
         # Write header
         k_width = len(str(num_train_dp))
         n_width = len(str(num_train_dp))
-        with open(early_stop_path, 'w') as f:
-            f.write(f"TMC Iteration Log\n")
-            f.write(f"{'='*60}\n")
+        with open(temp_iter_log_path, 'a') as f:
             f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
-            f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {tmc_seed}\n")
+            f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {seed}\n")
+            if seed != tmc_seed:
+                f.write(f"Note: TMC seed differs: {tmc_seed}\n")
             f.write(f"Early stopping enabled: {early_stopping}\n")
             f.write(f"\n{'Iter':<6} {'k':>{k_width}} / {'n':<{n_width}} {'Pct':>7} {'Status':<12}\n")
             f.write(f"{'-'*6} {'-'*k_width}   {'-'*n_width} {'-'*7} {'-'*12}\n")
         
         # Set the log path and formatting widths in dshap_com
-        dshap_com.early_stopping_log_path = early_stop_path
+        dshap_com.early_stopping_log_path = temp_iter_log_path
         dshap_com._log_k_width = k_width
         dshap_com._log_n_width = n_width
         dshap_com._log_iter = 0  # Counter for iteration number
-        print(f"[info] Early stopping log will be written to: {early_stop_path}")
+        print(f"[info] Iteration log will be written to temporary file")
     
     # ===== 4) Shapley 로드 or 계산 =====
     shapley_computation_time = None
@@ -320,17 +322,16 @@ def main():
         timing_info['shapley_computation'] = shapley_computation_time
         print(f"[TIMING] Shapley computation time: {shapley_computation_time:.4f}s")
         
-        # Append statistics to early stopping log if enabled
-        if log_early_stopping and os.path.exists(early_stop_path):
+        # Append statistics to temporary iteration log if enabled
+        if log_early_stopping and temp_iter_log_path and os.path.exists(temp_iter_log_path):
             # Count lines to get statistics
-            with open(early_stop_path, 'r') as f:
+            with open(temp_iter_log_path, 'r') as f:
                 lines = f.readlines()
             
             # Find data lines (skip header)
             data_lines = []
             for line in lines:
-                if line.strip() and not line.startswith('TMC') and not line.startswith('=') and \
-                   not line.startswith('Dataset') and not line.startswith('Mode') and \
+                if line.strip() and not line.startswith('Dataset') and not line.startswith('Mode') and \
                    not line.startswith('Early stopping') and not line.startswith('Iter') and \
                    not line.startswith('-'):
                     data_lines.append(line.strip())
@@ -371,7 +372,7 @@ def main():
                             break
                 
                 # Append statistics
-                with open(early_stop_path, 'a') as f:
+                with open(temp_iter_log_path, 'a') as f:
                     f.write(f"\n{'='*60}\n")
                     f.write(f"Statistics:\n")
                     f.write(f"  Total iterations: {total_count}\n")
@@ -396,7 +397,7 @@ def main():
                         bar = '█' * int(pct_of_total / 2)  # Visual bar (each █ = 2%)
                         f.write(f"  {range_label:>8}: {count:>4} ({pct_of_total:>5.1f}%) {bar}\n")
             
-            print(f"[info] Early stopping log saved to {early_stop_path}")
+            print(f"[info] Statistics appended to iteration log")
 
         result = {
             "dv_result": dv_result,
@@ -429,7 +430,7 @@ def main():
     original_indices = sampled_idx[sorted_indices]
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(indices_txt_path), exist_ok=True)
-    with open(indices_txt_path, 'w') as f:
+    with open(indices_txt_path, 'a') as f:
         for idx in original_indices:
             f.write(f"{idx}\n")
     print(f"[info] saved sorted indices to {indices_txt_path}")
@@ -514,6 +515,93 @@ def main():
         # print(f"bottom: {bottom_results}")
         print(f"random: {random_results}")
     
+    # ===== Save prediction results =====
+    setting_name = os.path.basename(shapley_path).replace('.pkl', '')
+    prediction_dir = f"{base_path}/shapley/{method_dir}/prediction"
+    os.makedirs(prediction_dir, exist_ok=True)
+    prediction_path = f"{prediction_dir}/{setting_name}.txt"
+    
+    with open(prediction_path, 'a') as f:
+        f.write(f"Prediction Results\n")
+        f.write(f"{'='*60}\n")
+        f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
+        f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {seed}\n")
+        if seed != tmc_seed:
+            f.write(f"Note: TMC seed differs: {tmc_seed}\n")
+        if approximate == "eigen":
+            f.write(f"Eigen rank: {eigen_rank_pct}% (actual rank: {eigen_rank}), Lambda: {lambda_}\n")
+        elif approximate == "inv":
+            f.write(f"Lambda: {lambda_}\n")
+        f.write(f"Selection percentages: 1-100% of training data\n")
+        f.write(f"\n{'='*60}\n")
+        f.write(f"Prediction Values (accuracy * 10000):\n")
+        f.write(f"{'-'*60}\n\n")
+        
+        # Write prediction results
+        f.write(f"top:\n{top_results}\n\n")
+        f.write(f"random:\n{random_results}\n\n")
+        
+        # If temporary iteration log exists, append its information
+        temp_iter_log_path = f"{prediction_dir}/.{setting_name}_iter_temp.txt"
+        if log_early_stopping and os.path.exists(temp_iter_log_path):
+            f.write(f"\n{'='*60}\n")
+            f.write(f"Early Stopping Statistics\n")
+            f.write(f"{'='*60}\n\n")
+            
+            # Read temporary iteration log and reorganize
+            with open(temp_iter_log_path, 'r') as temp_file:
+                lines = temp_file.readlines()
+                
+                # Find sections
+                header_lines = []
+                iteration_lines = []
+                statistics_lines = []
+                
+                current_section = 'header'
+                for i, line in enumerate(lines):
+                    # Check for section transitions
+                    if line.strip().startswith('Iter') and 'k / n' in line:
+                        current_section = 'iterations'
+                        iteration_lines.append(line)
+                        continue
+                    elif line.startswith('='*60):
+                        # Check if statistics section follows
+                        if i+1 < len(lines) and 'Statistics:' in lines[i+1]:
+                            current_section = 'statistics'
+                            continue
+                    
+                    if current_section == 'header':
+                        header_lines.append(line)
+                    elif current_section == 'iterations':
+                        iteration_lines.append(line)
+                    elif current_section == 'statistics':
+                        statistics_lines.append(line)
+                
+                # Write in new order: Statistics first, then iterations
+                # Write statistics
+                if statistics_lines:
+                    for line in statistics_lines:
+                        f.write(line)
+                
+                # Write iteration log
+                if iteration_lines:
+                    f.write(f"\n{'='*60}\n")
+                    f.write(f"Iteration Log\n")
+                    f.write(f"{'='*60}\n\n")
+                    for line in header_lines:
+                        f.write(line)
+                    for line in iteration_lines:
+                        f.write(line)
+            
+            # Delete temporary file
+            try:
+                os.remove(temp_iter_log_path)
+                print(f"[info] Removed temporary iteration log file")
+            except Exception as e:
+                print(f"[warning] Could not remove temporary file: {e}")
+    
+    print(f"[info] saved prediction results to {prediction_path}")
+    
     # ===== Print timing summary =====
     if timing_info:
         print("\n" + "="*80)
@@ -539,7 +627,7 @@ def main():
         
         # Save timing info to a separate log file
         timing_log_path = shapley_path.replace('.pkl', '_timing.txt')
-        with open(timing_log_path, 'w') as f:
+        with open(timing_log_path, 'a') as f:
             f.write("TIMING SUMMARY\n")
             f.write("="*80 + "\n")
             

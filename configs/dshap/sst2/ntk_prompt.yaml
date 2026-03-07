@@ -28,7 +28,7 @@ probe_com: !NTKProbe &id_probe_com
     workers_per_device: 1
     # grad_chunksize: 50000 # adjust this value if memory is insufficient
     # mm_col_chunksize: 4000
-    grad_chunksize: 300000 # Reduced from 10000000 to prevent memory allocation error
+    grad_chunksize: 5000000 # Reduced from 10000000 to prevent memory allocation error
     mm_col_chunksize: 8000 # Reduced from 20000 to match grad_chunksize reduction
     loader_batch_size: 16  # adjust this value if memory is insufficient
     loader_num_workers: 0   # when memory is pinned, don't set this to non-zero values
