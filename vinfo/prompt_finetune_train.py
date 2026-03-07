@@ -412,7 +412,7 @@ def main():
     if sweep_enabled and args.sweep_output_file is None:
         # Use pbft_acc directory for output
         base_dir = args.train_indices_file.replace('/indices/', '/pbft_acc/')
-        args.sweep_output_file = base_dir.replace('_indices.txt', '_pbft_acc.txt')
+        args.sweep_output_file = base_dir.replace('_indices.txt', f'_batch{args.batch_size}_lr{args.lr}_epoch{args.max_epochs}_pbft_acc.txt')
         print(f"[info] Auto-constructed sweep_output_file: {args.sweep_output_file}")
     
     # Execute sweep mode if enabled
@@ -790,7 +790,7 @@ def run_single_experiment(args):
         # if val_acc > best_val_acc:
         #     best_val_acc = val_acc
         #     best_epoch = epoch
-        #     save_path = os.path.join(args.save_dir, 'best_prompt_model.pt')
+        #     save_path = os.path.join(args.save_dir, f'batch{args.batch_size}_lr{args.lr}_epoch{args.max_epochs}.pt')
         #     torch.save({
         #         'epoch': epoch,
         #         'model_state_dict': model.state_dict(),
@@ -807,13 +807,13 @@ def run_single_experiment(args):
     # print(f"{'='*80}")
     
     # Load best model and evaluate
-    # checkpoint = torch.load(os.path.join(args.save_dir, 'best_prompt_model.pt'))
+    # checkpoint = torch.load(os.path.join(args.save_dir, f'batch{args.batch_size}_lr{args.lr}_epoch{args.max_epochs}.pt'))
     # model.load_state_dict(checkpoint['model_state_dict'])
     final_loss, final_acc = evaluate(model, val_loader, device)
     # print(f"Final Test Results:")
     # print(f"  Loss: {final_loss:.4f}")
     # print(f"  Accuracy: {final_acc:.4f}")
-    # print(f"\nModel saved to: {args.save_dir}/best_prompt_model.pt")
+    # print(f"\nModel saved to: {args.save_dir}/batch{args.batch_size}_lr{args.lr}_epoch{args.max_epochs}.pt")
     
     return final_acc
 

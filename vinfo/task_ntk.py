@@ -193,19 +193,28 @@ def main():
         }
         with open(ntk_path, "wb") as f:
             pickle.dump(bundle, f)
-        gc.collect()
         
+        print("++++++++++++++++++++++++++++++++++saving ntk cache+++++++++++++++++++++++++++++++++++")
+        
+        # Cleanup multiprocessing resources
         children = mp.active_children()
         if children:
             print(f"[cleanup] active children = {len(children)}")
-        for p in children:
-            p.join(timeout=5)
-        for p in children:
-            if p.is_alive():
-                p.terminate()
+            for p in children:
                 p.join(timeout=5)
-
-        print("++++++++++++++++++++++++++++++++++saving ntk cache+++++++++++++++++++++++++++++++++++")
+            for p in children:
+                if p.is_alive():
+                    print(f"[cleanup] terminating process {p.pid}")
+                    p.terminate()
+                    p.join(timeout=5)
+        
+        # CUDA cleanup
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        
+        # Force garbage collection
+        gc.collect()
 
     # 최종 확인
     # probe_model.ntk.shape 찍고 싶으면 get_cached_ntk 호출해야 하는데,
@@ -213,19 +222,19 @@ def main():
     print("[done] NTK cached with indices.")
     print(f"[done] sampled_idx len = {len(sampled_idx)}")
     print(f"[done] sampled_val_idx len = {len(sampled_val_idx)}")
+    
+    # Final cleanup
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
 
 
 if __name__ == "__main__":
-    # try:
-    #     mp.set_start_method("spawn", force=True)
-    # except RuntimeError:
-    #     pass
-    # set_sharing_strategy("file_system")
-    mp.set_start_method("spawn", force=True)
-
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    os.environ["OMP_NUM_THREADS"] = '16'
-    os.environ["OPENBLAS_NUM_THREADS"] = '16'
-    os.environ["MKL_NUM_THREADS"] = '16'
-
+    # Note: set_start_method already called at top of file
+    # Avoid calling it again with force=True to prevent multiprocessing issues
+    
     main()
+    
+    # Final cleanup and graceful exit
+    import sys
+    sys.exit(0)
