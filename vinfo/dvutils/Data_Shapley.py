@@ -73,6 +73,8 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         self.val_set = None
 
         self.initialize_ntk_state = False
+        self.early_stopping_log_path = None  # File path for real-time logging
+        self.log_early_stopping = False  # Flag to enable early stopping logging
 
     def tmc_one_iteration_idx(self, target_idx=0, approximate=False):
         idxs = np.random.permutation(self.n_participants)
@@ -152,6 +154,7 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         new_score = self.get_null_score()
         selected_idx = []
         tmp_inspect = np.zeros([self.n_participants, self.num_metric])
+        early_stopped = False
         for n, idx in tqdm(enumerate(idxs), leave=False):
             old_score = new_score
             selected_idx.append(idx)
@@ -166,10 +169,22 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
                 if (distance_to_full_score <= tolerance * np.abs(self.get_full_score() - self.get_null_score())).all():
                     truncation_counter += 1
                     if truncation_counter > 1:
+                        if self.log_early_stopping:
+                            early_stopped = True
                         print(n)
                         break
                 else:
                     truncation_counter = 0
+        
+        # Record to file in real-time
+        if self.log_early_stopping and self.early_stopping_log_path:
+            self._log_iter += 1
+            k = len(selected_idx)
+            n = self.n_participants
+            percentage = (k / n) * 100
+            status = "Early Stop" if early_stopped else "Complete"
+            with open(self.early_stopping_log_path, 'a') as f:
+                f.write(f"{self._log_iter:<6} {k:>{self._log_k_width}} / {n:<{self._log_n_width}} {percentage:>6.2f}% {status:<12}\n")
 
         self.mc_cache.append(np.copy(marginal_contribs))
         self.ac_cache.append(np.copy(tmp_inspect))
@@ -197,7 +212,9 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         null_score_ = np.array([new_score[0].sum()/len(self.val_set), new_score[1].sum()/len(self.val_set)])
         # print(f'null_score_: {null_score_.shape}')
 
+        truncation_counter = 0
         selected_idx = []
+        early_stopped = False
         for n, idx in enumerate(idxs):
             old_score = new_score
             selected_idx.append(idx)
@@ -214,9 +231,21 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
                 if (distance_to_full_score <= tolerance * np.abs(self.get_full_score_per_point() - null_score_)).all():
                     truncation_counter += 1
                     if truncation_counter > 1:
+                        if self.log_early_stopping:
+                            early_stopped = True
                         break
                 else:
                     truncation_counter = 0
+        
+        # Record to file in real-time
+        if self.log_early_stopping and self.early_stopping_log_path:
+            self._log_iter += 1
+            k = len(selected_idx)
+            n = self.n_participants
+            percentage = (k / n) * 100
+            status = "Early Stop" if early_stopped else "Complete"
+            with open(self.early_stopping_log_path, 'a') as f:
+                f.write(f"{self._log_iter:<6} {k:>{self._log_k_width}} / {n:<{self._log_n_width}} {percentage:>6.2f}% {status:<12}\n")
 
         _tmc_compute(idxs=idxs, marginal_contribs=marginal_contribs)
         self.probe_model.pre_inv = None

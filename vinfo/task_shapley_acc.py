@@ -17,6 +17,52 @@ from dvutils.Data_Shapley import Fast_Data_Shapley  # YAML tag 해석용
 import argparse
 
 
+def log_gpu_info():
+    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    print(f"[gpu] CUDA_VISIBLE_DEVICES={cuda_visible}")
+    print(f"[gpu] torch.cuda.is_available()={torch.cuda.is_available()}")
+
+    if not torch.cuda.is_available():
+        print("[gpu] CUDA is not available. Running on CPU.")
+        return
+
+    device_count = torch.cuda.device_count()
+    print(f"[gpu] torch.cuda.device_count()={device_count}")
+
+    for gpu_idx in range(device_count):
+        props = torch.cuda.get_device_properties(gpu_idx)
+        total_mem_gb = props.total_memory / (1024 ** 3)
+        print(
+            f"[gpu] cuda:{gpu_idx} name={props.name}, total_memory={total_mem_gb:.2f} GB"
+        )
+
+    current_idx = torch.cuda.current_device()
+    print(f"[gpu] torch.cuda.current_device()={current_idx}")
+    print(f"[gpu] current_device_name={torch.cuda.get_device_name(current_idx)}")
+
+
+def get_gpu_info():
+    """Collect GPU information for timing records"""
+    gpu_info = {}
+    
+    if not torch.cuda.is_available():
+        gpu_info['device_type'] = 'CPU'
+        gpu_info['used_gpu_count'] = 0
+        return gpu_info
+    
+    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    current_idx = torch.cuda.current_device()
+    current_device_name = torch.cuda.get_device_name(current_idx)
+    
+    gpu_info['used_gpu_count'] = 1  # Single GPU usage (no DataParallel)
+    gpu_info['gpu_index'] = f"cuda:{current_idx}"
+    gpu_info['gpu_model'] = current_device_name
+    if cuda_visible:
+        gpu_info['cuda_visible_devices'] = cuda_visible
+    
+    return gpu_info
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_name", type=str, default="mr")
@@ -35,11 +81,14 @@ def parse_args():
     parser.add_argument("--num_train_selected_list", type=int, nargs='+', 
                         default=[i for i in range(1, 101)],
                         help="List of percentages (1-100) of num_train_dp to use as training data")
+    parser.add_argument("--log_early_stopping", action="store_true",
+                        help="Enable logging of early stopping points in TMC iterations")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    log_gpu_info()
 
     dataset_name = args.dataset_name
     seed = args.seed
@@ -54,9 +103,14 @@ def main():
     num_train_selected_list = args.num_train_selected_list
     eigen_rank_pct = args.eigen_rank  # Now interpreted as percentage of num_dp
     lambda_ = args.lambda_
+    log_early_stopping = args.log_early_stopping
     
     # Initialize timing info dictionary
     timing_info = {}
+    
+    # Collect GPU information
+    gpu_info = get_gpu_info()
+    timing_info['gpu_info'] = gpu_info
     
     # Calculate actual eigen rank from percentage
     eigen_rank = int(num_train_dp * eigen_rank_pct / 100)
@@ -89,6 +143,11 @@ def main():
     list_dataset = yaml_args["dataset"]
     probe_model = yaml_args["probe_com"]
     dshap_com = yaml_args["dshap_com"]
+    
+    # Enable early stopping logging if requested
+    if log_early_stopping:
+        dshap_com.log_early_stopping = True
+        print(f"[info] Early stopping logging enabled")
 
     if prompt:
         probe_model.model.init(list_dataset.label_word_list)
@@ -194,6 +253,32 @@ def main():
     )
     print(f"[info] shapley_path = {shapley_path}")
     
+    # Setup early stopping log file if enabled
+    if log_early_stopping:
+        setting_name = os.path.basename(shapley_path).replace('.pkl', '')
+        early_stop_dir = f"{base_path}/shapley/{method_dir}/early_stopping"
+        os.makedirs(early_stop_dir, exist_ok=True)
+        early_stop_path = f"{early_stop_dir}/{setting_name}.txt"
+        
+        # Write header
+        k_width = len(str(num_train_dp))
+        n_width = len(str(num_train_dp))
+        with open(early_stop_path, 'w') as f:
+            f.write(f"TMC Iteration Log\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
+            f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {tmc_seed}\n")
+            f.write(f"Early stopping enabled: {early_stopping}\n")
+            f.write(f"\n{'Iter':<6} {'k':>{k_width}} / {'n':<{n_width}} {'Pct':>7} {'Status':<12}\n")
+            f.write(f"{'-'*6} {'-'*k_width}   {'-'*n_width} {'-'*7} {'-'*12}\n")
+        
+        # Set the log path and formatting widths in dshap_com
+        dshap_com.early_stopping_log_path = early_stop_path
+        dshap_com._log_k_width = k_width
+        dshap_com._log_n_width = n_width
+        dshap_com._log_iter = 0  # Counter for iteration number
+        print(f"[info] Early stopping log will be written to: {early_stop_path}")
+    
     # ===== 4) Shapley 로드 or 계산 =====
     shapley_computation_time = None
     try:
@@ -234,6 +319,84 @@ def main():
         shapley_computation_time = time.time() - shapley_start_time
         timing_info['shapley_computation'] = shapley_computation_time
         print(f"[TIMING] Shapley computation time: {shapley_computation_time:.4f}s")
+        
+        # Append statistics to early stopping log if enabled
+        if log_early_stopping and os.path.exists(early_stop_path):
+            # Count lines to get statistics
+            with open(early_stop_path, 'r') as f:
+                lines = f.readlines()
+            
+            # Find data lines (skip header)
+            data_lines = []
+            for line in lines:
+                if line.strip() and not line.startswith('TMC') and not line.startswith('=') and \
+                   not line.startswith('Dataset') and not line.startswith('Mode') and \
+                   not line.startswith('Early stopping') and not line.startswith('Iter') and \
+                   not line.startswith('-'):
+                    data_lines.append(line.strip())
+            
+            if data_lines:
+                # Parse statistics
+                early_stopped_count = sum(1 for line in data_lines if 'Early Stop' in line)
+                completed_count = sum(1 for line in data_lines if 'Complete' in line)
+                total_count = len(data_lines)
+                
+                # Calculate averages
+                k_values = []
+                n_values = []
+                early_k_values = []
+                percentages = []
+                for line in data_lines:
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        k = int(parts[1])
+                        n = int(parts[3])
+                        # Extract percentage (remove % sign)
+                        pct_str = parts[4].rstrip('%')
+                        pct = float(pct_str)
+                        k_values.append(k)
+                        n_values.append(n)
+                        percentages.append(pct)
+                        if 'Early Stop' in line:
+                            early_k_values.append(k)
+                
+                # Calculate distribution by percentage ranges
+                bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+                distribution = {f"{bins[i]}-{bins[i+1]}%": 0 for i in range(len(bins)-1)}
+                
+                for pct in percentages:
+                    for i in range(len(bins)-1):
+                        if bins[i] <= pct < bins[i+1] or (i == len(bins)-2 and pct == 100):
+                            distribution[f"{bins[i]}-{bins[i+1]}%"] += 1
+                            break
+                
+                # Append statistics
+                with open(early_stop_path, 'a') as f:
+                    f.write(f"\n{'='*60}\n")
+                    f.write(f"Statistics:\n")
+                    f.write(f"  Total iterations: {total_count}\n")
+                    f.write(f"  - Early stopped: {early_stopped_count} ({early_stopped_count/total_count*100:.1f}%)\n")
+                    f.write(f"  - Completed: {completed_count} ({completed_count/total_count*100:.1f}%)\n")
+                    if k_values:
+                        avg_k = np.mean(k_values)
+                        avg_n = np.mean(n_values)
+                        avg_pct = (avg_k / avg_n) * 100
+                        f.write(f"  Overall average: {avg_k:.1f} / {avg_n:.1f} ({avg_pct:.2f}%)\n")
+                    if early_k_values:
+                        avg_early_k = np.mean(early_k_values)
+                        avg_early_pct = (avg_early_k / n_values[0]) * 100
+                        f.write(f"  Early stop avg: {avg_early_k:.1f} / {n_values[0]:.1f} ({avg_early_pct:.2f}%)\n")
+                    
+                    # Write distribution
+                    f.write(f"\n{'-'*60}\n")
+                    f.write(f"Early Stopping Distribution:\n")
+                    for range_label in [f"{bins[i]}-{bins[i+1]}%" for i in range(len(bins)-1)]:
+                        count = distribution[range_label]
+                        pct_of_total = (count / total_count) * 100 if total_count > 0 else 0
+                        bar = '█' * int(pct_of_total / 2)  # Visual bar (each █ = 2%)
+                        f.write(f"  {range_label:>8}: {count:>4} ({pct_of_total:>5.1f}%) {bar}\n")
+            
+            print(f"[info] Early stopping log saved to {early_stop_path}")
 
         result = {
             "dv_result": dv_result,
@@ -356,8 +519,22 @@ def main():
         print("\n" + "="*80)
         print("TIMING SUMMARY")
         print("="*80)
+        
+        # Print GPU info first
+        if 'gpu_info' in timing_info:
+            gpu_info = timing_info['gpu_info']
+            print("\nGPU Information:")
+            print("-" * 40)
+            for key, value in gpu_info.items():
+                print(f"{key:.<40} {value}")
+            print("-" * 40 + "\n")
+        
+        # Print timing measurements
+        print("Timing Measurements:")
+        print("-" * 40)
         for key, value in timing_info.items():
-            print(f"{key:.<40} {value:.4f}s")
+            if key != 'gpu_info':
+                print(f"{key:.<40} {value:.4f}s")
         print("="*80 + "\n")
         
         # Save timing info to a separate log file
@@ -365,8 +542,21 @@ def main():
         with open(timing_log_path, 'w') as f:
             f.write("TIMING SUMMARY\n")
             f.write("="*80 + "\n")
+            
+            # Write GPU info
+            if 'gpu_info' in timing_info:
+                f.write("\nGPU Information:\n")
+                f.write("-" * 40 + "\n")
+                for key, value in timing_info['gpu_info'].items():
+                    f.write(f"{key}: {value}\n")
+                f.write("-" * 40 + "\n\n")
+            
+            # Write timing measurements
+            f.write("Timing Measurements:\n")
+            f.write("-" * 40 + "\n")
             for key, value in timing_info.items():
-                f.write(f"{key}: {value:.4f}s\n")
+                if key != 'gpu_info':
+                    f.write(f"{key}: {value:.4f}s\n")
             f.write("="*80 + "\n")
         print(f"[info] saved timing info to {timing_log_path}")
 
