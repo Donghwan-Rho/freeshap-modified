@@ -24,7 +24,7 @@ probe_com: !NTKProbe &id_probe_com
     savedir: ./ntks
     logdir: null
     workers_per_device: 1
-    grad_chunksize: 1000000
+    grad_chunksize: 300000
     mm_col_chunksize: 4000
     loader_batch_size: 16
     loader_num_workers: 0
