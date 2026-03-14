@@ -264,7 +264,7 @@ def main():
         # Write header
         k_width = len(str(num_train_dp))
         n_width = len(str(num_train_dp))
-        with open(early_stop_path, 'w') as f:
+        with open(early_stop_path, 'a') as f:
             f.write(f"TMC Iteration Log\n")
             f.write(f"{'='*60}\n")
             f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
@@ -430,7 +430,7 @@ def main():
     original_indices = sampled_idx[sorted_indices]
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(indices_txt_path), exist_ok=True)
-    with open(indices_txt_path, 'w') as f:
+    with open(indices_txt_path, 'a') as f:
         for idx in original_indices:
             f.write(f"{idx}\n")
     print(f"[info] saved sorted indices to {indices_txt_path}")
@@ -443,12 +443,19 @@ def main():
     # Initialize result containers for each data_mode
     if approximate == "inv":
         top_results = []
+        random_results = []
     elif approximate == "eigen":
         top_results_eigen = []
+        random_results_eigen = []
         top_results_inv = []
+        random_results_inv = []
+
+    # Prepare all indices for random selection
+    all_indices = np.arange(len(sampled_idx))
 
     # ===== Stage 1: INV mode predictions (if applicable) =====
     if approximate == "inv":
+        print("[info] Running INV mode predictions (top)...")
         for num_train_selected_pct in num_train_selected_list:
             # Convert percentage to actual number of samples
             k = int(num_train_dp * num_train_selected_pct / 100)
@@ -469,11 +476,32 @@ def main():
                 test_set=val_set,
             )
             top_results.append(int(torch.round(acc * 10000).item()))
+        
+        print("[info] Running INV mode predictions (random)...")
+        for num_train_selected_pct in num_train_selected_list:
+            k = int(num_train_dp * num_train_selected_pct / 100)
+            k = int(min(k, len(acc_sum_per_train)))
+            if k <= 0:
+                continue
+
+            # Random selection
+            random_indices = np.random.choice(all_indices, size=k, replace=False)
+            
+            # Reset pre_inv before each kernel_regression
+            probe_model.pre_inv = None
+            probe_model.kr_model = None
+            
+            _, acc = probe_model.kernel_regression(
+                train_indices=np.array(random_indices, dtype=int),
+                test_set=val_set,
+            )
+            random_results.append(int(torch.round(acc * 10000).item()))
     
     # ===== Stage 2: EIGEN mode predictions (all k values) =====
     elif approximate == "eigen":
         probe_model.eigen_decom_mode = "top"
         
+        print("[info] Running EIGEN mode predictions (top)...")
         for num_train_selected_pct in num_train_selected_list:
             # Convert percentage to actual number of samples
             k = int(num_train_dp * num_train_selected_pct / 100)
@@ -492,6 +520,23 @@ def main():
             )
             top_results_eigen.append(int(torch.round(acc * 10000).item()))
         
+        print("[info] Running EIGEN mode predictions (random)...")
+        for num_train_selected_pct in num_train_selected_list:
+            k = int(num_train_dp * num_train_selected_pct / 100)
+            k = int(min(k, len(acc_sum_per_train)))
+            if k <= 0:
+                continue
+
+            # Random selection
+            random_indices = np.random.choice(all_indices, size=k, replace=False)
+            
+            # Eigen prediction for random
+            _, acc = probe_model.kernel_regression(
+                train_indices=np.array(random_indices, dtype=int),
+                test_set=val_set,
+            )
+            random_results_eigen.append(int(torch.round(acc * 10000).item()))
+        
         # ===== Stage 3: INV mode predictions (all k values) =====
         print("[info] Switching to INV mode for dual-mode evaluation...")
         
@@ -500,6 +545,7 @@ def main():
         probe_model.approximate_ntk = "inv"
         probe_model.set_inv_params(lam=inv_lambda_)
         
+        print("[info] Running INV mode predictions (top)...")
         for num_train_selected_pct in num_train_selected_list:
             # Convert percentage to actual number of samples
             k = int(num_train_dp * num_train_selected_pct / 100)
@@ -521,6 +567,27 @@ def main():
             )
             top_results_inv.append(int(torch.round(acc * 10000).item()))
         
+        print("[info] Running INV mode predictions (random)...")
+        for num_train_selected_pct in num_train_selected_list:
+            k = int(num_train_dp * num_train_selected_pct / 100)
+            k = int(min(k, len(acc_sum_per_train)))
+            if k <= 0:
+                continue
+
+            # Random selection
+            random_indices = np.random.choice(all_indices, size=k, replace=False)
+            
+            # Reset INV caches before each prediction
+            probe_model.pre_inv = None
+            probe_model.kr_model = None
+            
+            # INV prediction for random
+            _, acc = probe_model.kernel_regression(
+                train_indices=np.array(random_indices, dtype=int),
+                test_set=val_set,
+            )
+            random_results_inv.append(int(torch.round(acc * 10000).item()))
+        
         # Restore original EIGEN mode
         print("[info] Restoring EIGEN mode...")
         probe_model.approximate_ntk = original_approx
@@ -539,11 +606,14 @@ def main():
     if approximate == "inv":
         print(f"\n[INV mode with lambda={inv_lambda_}]")
         print(f"top: {top_results}")
+        print(f"random:\n{random_results}")
     elif approximate == "eigen":
         print(f"\n[Eigen mode with lambda={eigen_lambda_}]")
         print(f"top: {top_results_eigen}")
+        print(f"random:\n{random_results_eigen}")
         print(f"\n[INV mode with lambda={inv_lambda_}]")
         print(f"top: {top_results_inv}")
+        print(f"random:\n{random_results_inv}")
     
     # ===== Save predictions to txt file =====
     predictions_filename = shapley_path.split('/')[-1].replace('.pkl', '_predictions.txt')
@@ -651,8 +721,9 @@ def main():
         for iter_num, pct in iter_stop_points:
             f.write(f"{iter_num:{iter_width}d}: {pct:5.1f}%\n")
     
-    with open(predictions_txt_path, 'w') as f:
+    with open(predictions_txt_path, 'a') as f:
         if approximate == "inv":
+            f.write(f"\n{'='*80}\n")
             f.write(f"dataset: {dataset_name}\n")
             f.write(f"train: {num_train_dp}, val: {val_sample_num}\n")
             f.write(f"seed: {seed}\n")
@@ -660,11 +731,14 @@ def main():
             f.write(f"inv mode lambda={inv_lambda_:.0e}\n")
             f.write(f"top:\n")
             f.write(f"{top_results}\n")
+            f.write(f"random:\n")
+            f.write(f"{random_results}\n")
             
             # Add early stopping statistics if flag is enabled
             add_early_stopping_info(f, base_path, method_dir, shapley_path, log_early_stopping)
             
         elif approximate == "eigen":
+            f.write(f"\n{'='*80}\n")
             f.write(f"eigen rank: {eigen_rank_pct}% (actual: {eigen_rank})\n")
             f.write(f"dataset: {dataset_name}\n")
             f.write(f"train: {num_train_dp}, val: {val_sample_num}\n")
@@ -674,10 +748,14 @@ def main():
             f.write(f"eigen mode lambda={eigen_lambda_:.0e}\n")
             f.write(f"top:\n")
             f.write(f"{top_results_eigen}\n")
+            f.write(f"random:\n")
+            f.write(f"{random_results_eigen}\n")
             f.write(f"\n")
             f.write(f"inv mode lambda={inv_lambda_:.0e}\n")
             f.write(f"top:\n")
             f.write(f"{top_results_inv}\n")
+            f.write(f"random:\n")
+            f.write(f"{random_results_inv}\n")
             
             # Add early stopping statistics if flag is enabled
             add_early_stopping_info(f, base_path, method_dir, shapley_path, log_early_stopping)
@@ -709,7 +787,7 @@ def main():
         
         # Save timing info to a separate log file
         timing_log_path = shapley_path.replace('.pkl', '_timing.txt')
-        with open(timing_log_path, 'w') as f:
+        with open(timing_log_path, 'a') as f:
             f.write("TIMING SUMMARY\n")
             f.write("="*80 + "\n")
             

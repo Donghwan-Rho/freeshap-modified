@@ -163,10 +163,13 @@ def main():
     else:
         output_dir = base_path
     
-    os.makedirs(output_dir, exist_ok=True)
+    # Create overlap directory
+    overlap_dir = f"{output_dir}/overlap"
+    os.makedirs(overlap_dir, exist_ok=True)
+    
     output_path = (
-        f"{output_dir}/overlap_inv_eigen_seed{seed}_num{num_train_dp}_"
-        f"val{val_sample_num}_tmc{tmc_iter}.png"
+        f"{overlap_dir}/overlap_inv_eigen_seed{seed}_num{num_train_dp}_"
+        f"val{val_sample_num}_invlam{inv_lambda_str}_eigenlam{eigen_lambda_str}_tmc{tmc_iter}.png"
     )
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     print(f"Saved plot to: {output_path}")
