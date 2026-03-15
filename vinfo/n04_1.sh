@@ -1,24 +1,24 @@
 #!/bin/sh
-# python task_ntk.py --seed 2024 --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000
-# python task_ntk.py --seed 2024 --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000
-# python task_ntk.py --seed 2024 --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-6
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-5
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-4
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-3
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-2
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 1000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-1
-
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-6
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-5
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-4
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-3
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-2
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 2000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-1
-
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-6
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-5
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-4
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-3
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-2
-CUDA_VISIBLE_DEVICES=1 python task_shapley_acc.py --seed 2024 --dataset_name mnli --num_train_dp 5000 --val_sample_num 1000 --approximate eigen --eigen_rank 10 --lambda_ 1e-1
+python task_eigenvalues.py --dataset_name mnli --seed 2025 --num_train_dp 10000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name sst2 --seed 2025 --num_train_dp 1000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name sst2 --seed 2025 --num_train_dp 2000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name sst2 --seed 2025 --num_train_dp 5000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name sst2 --seed 2025 --num_train_dp 10000 --val_sample_num 872
+python task_eigenvalues.py --dataset_name ag_news --seed 2025 --num_train_dp 1000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name ag_news --seed 2025 --num_train_dp 2000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name ag_news --seed 2025 --num_train_dp 5000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name ag_news --seed 2025 --num_train_dp 10000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name qqp --seed 2025 --num_train_dp 1000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name qqp --seed 2025 --num_train_dp 2000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name qqp --seed 2025 --num_train_dp 5000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name qqp --seed 2025 --num_train_dp 10000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name rte --seed 2025 --num_train_dp 1000 --val_sample_num 277
+python task_eigenvalues.py --dataset_name rte --seed 2025 --num_train_dp 2000 --val_sample_num 277
+python task_eigenvalues.py --dataset_name rte --seed 2025 --num_train_dp 2490 --val_sample_num 277
+python task_eigenvalues.py --dataset_name mrpc --seed 2025 --num_train_dp 1000 --val_sample_num 408
+python task_eigenvalues.py --dataset_name mrpc --seed 2025 --num_train_dp 2000 --val_sample_num 408
+python task_eigenvalues.py --dataset_name mrpc --seed 2025 --num_train_dp 3668 --val_sample_num 408
+python task_eigenvalues.py --dataset_name mr --seed 2025 --num_train_dp 1000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name mr --seed 2025 --num_train_dp 2000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name mr --seed 2025 --num_train_dp 5000 --val_sample_num 1000
+python task_eigenvalues.py --dataset_name mr --seed 2025 --num_train_dp 8530 --val_sample_num 1000

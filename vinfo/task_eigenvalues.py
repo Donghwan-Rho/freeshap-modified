@@ -119,18 +119,69 @@ def save_plot(eigvals, out_png):
 
     # x-axis: top percentage over all eigenvalues
     x_percent = (positive_idx + 1) / total_count * 100.0
+    
+    # Compute cumulative sum and ratio
+    cumsum = np.cumsum(pos_vals)
+    total_sum = cumsum[-1]
+    cumulative_ratio = cumsum / total_sum * 100.0  # percentage
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(x_percent, pos_vals, marker='o', markersize=3, linewidth=1.2)
-    plt.yscale('log')
-    plt.xlabel('Top Eigenvalue Percentage (%)')
-    plt.ylabel('Eigenvalue (log scale)')
-    plt.title('NTK Eigenvalue Spectrum')
-    plt.grid(True, alpha=0.3)
-    plt.xlim(0, 100)
+    # Create figure with 2 subplots (horizontal layout)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    
+    # ===== Subplot 1: Eigenvalue spectrum (log scale) =====
+    ax1.plot(x_percent, pos_vals, marker='o', markersize=3, linewidth=1.2)
+    ax1.set_yscale('log')
+    ax1.set_xlabel('Top Eigenvalue Percentage (%)', fontsize=20)
+    ax1.set_ylabel('Eigenvalue (log scale)', fontsize=20)
+    ax1.set_title('NTK Eigenvalue Spectrum', fontsize=20, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    ax1.set_xlim(0, 100)
+    ax1.tick_params(axis='both', labelsize=16)
+    
+    # ===== Subplot 2: Cumulative explained ratio =====
+    ax2.plot(x_percent, cumulative_ratio, marker='o', markersize=3, linewidth=1.2, color='blue')
+    ax2.set_xlabel('Top Eigenvalue Percentage (%)', fontsize=14)
+    ax2.set_ylabel('Cumulative Explained Ratio (%)', fontsize=14)
+    ax2.set_title('Cumulative Variance Explained', fontsize=16, fontweight='bold')
+    ax2.grid(True, alpha=0.3)
+    ax2.set_xlim(0, 100)
+    ax2.set_ylim(0, 105)
+    ax2.tick_params(axis='both', labelsize=12)
+    
+    # Mark key thresholds (10%, 20%, ..., 90%)
+    thresholds = [10, 20, 30, 40, 50, 60, 70, 80, 90]
+    threshold_info = []
+    
+    for threshold in thresholds:
+        # Find the first index where cumulative ratio >= threshold
+        idx = np.searchsorted(cumulative_ratio, threshold)
+        if idx < len(x_percent):
+            x_pos = x_percent[idx]
+            y_pos = threshold  # Use exact threshold value for y
+            
+            # Draw horizontal and vertical lines
+            ax2.axhline(y=threshold, color='red', linestyle='--', linewidth=0.8, alpha=0.4)
+            ax2.axvline(x=x_pos, color='red', linestyle='--', linewidth=0.8, alpha=0.4)
+            
+            # Annotate with marker
+            ax2.plot(x_pos, cumulative_ratio[idx], 'ro', markersize=7)
+            
+            # Add text annotation for x and y coordinates
+            # Position text slightly offset from the point
+            text_offset_x = 2
+            text_offset_y = 2
+            ax2.text(x_pos + text_offset_x, cumulative_ratio[idx] + text_offset_y, 
+                    f'({x_pos:.1f}%, {threshold}%)',
+                    fontsize=14, color='red', fontweight='bold',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='red', alpha=0.7))
+            
+            threshold_info.append((threshold, x_pos, idx + 1))
+    
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
     plt.close()
+    
+    return threshold_info
 
 
 def main():
@@ -152,11 +203,17 @@ def main():
 
     eigvals = compute_eigenvalues(ntk)
 
-    eig_txt_path = ntk_path.replace('.pkl', '_eigenvalues.txt')
+    # Create eigenvalues directory
+    eigenvalues_dir = os.path.join(base_path, "eigenvalues")
+    os.makedirs(eigenvalues_dir, exist_ok=True)
+    
+    # Extract filename from ntk_path and save in eigenvalues directory
+    ntk_basename = os.path.basename(ntk_path)
+    eig_txt_path = os.path.join(eigenvalues_dir, ntk_basename.replace('.pkl', '_eigenvalues.txt'))
     np.savetxt(eig_txt_path, eigvals, fmt='%.10e')
 
-    eig_png_path = ntk_path.replace('.pkl', '_eigenvalues_log.png')
-    save_plot(eigvals, eig_png_path)
+    eig_png_path = os.path.join(eigenvalues_dir, ntk_basename.replace('.pkl', '_eigenvalues_log.png'))
+    threshold_info = save_plot(eigvals, eig_png_path)
 
     top_k = min(20, len(eigvals))
     print(f"[done] Saved eigenvalues text: {eig_txt_path}")
@@ -164,6 +221,24 @@ def main():
     print(f"[done] Top-{top_k} eigenvalues:")
     for i in range(top_k):
         print(f"  {i+1:>2}: {eigvals[i]:.10e}")
+    
+    # Print cumulative variance explained thresholds
+    print(f"\n[info] Cumulative Variance Explained:")
+    print(f"{'Threshold':>10} | {'Top %':>8} | {'# Eigenvalues':>15}")
+    print(f"{'-'*10}-+-{'-'*8}-+-{'-'*15}")
+    for threshold, top_pct, num_eigs in threshold_info:
+        print(f"{threshold:>9}% | {top_pct:>7.2f}% | {num_eigs:>15}")
+    
+    # Save threshold info to text file
+    threshold_txt_path = os.path.join(eigenvalues_dir, ntk_basename.replace('.pkl', '_eigenvalues_thresholds.txt'))
+    with open(threshold_txt_path, 'w') as f:
+        f.write("Cumulative Variance Explained Thresholds\n")
+        f.write("="*50 + "\n")
+        f.write(f"{'Threshold':>10} | {'Top %':>8} | {'# Eigenvalues':>15}\n")
+        f.write(f"{'-'*10}-+-{'-'*8}-+-{'-'*15}\n")
+        for threshold, top_pct, num_eigs in threshold_info:
+            f.write(f"{threshold:>9}% | {top_pct:>7.2f}% | {num_eigs:>15}\n")
+    print(f"[done] Saved threshold info: {threshold_txt_path}")
 
 
 if __name__ == "__main__":
