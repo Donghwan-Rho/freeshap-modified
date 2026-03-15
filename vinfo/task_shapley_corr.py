@@ -140,6 +140,11 @@ def main():
                 linestyle='-', marker='o', markersize=4, 
                 label=f'rank {rank}%', alpha=0.85)
     
+    # Add baseline: y=x (random selection expected overlap)
+    ax.plot(selected_dp_percent, selected_dp_percent, 
+            color='red', linestyle='--', linewidth=2.0, 
+            label='Random baseline (y=x)', alpha=0.7)
+    
     # Add reference line at 100%
     ax.axhline(y=100, color='black', linestyle='--', linewidth=1.5, alpha=0.3)
     
