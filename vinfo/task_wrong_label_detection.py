@@ -280,7 +280,7 @@ def main():
     poison_tag = f"_poison{poison_pct}"
 
     shapley_path = (
-        f"{base_path}/shapley/{method_dir}/results/{model_name}"
+        f"{detection_base_path}/shapley/{method_dir}/results/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}"
         f"{extra_tag}_sign{signgd}_earlystop{early_stopping}"
         f"_tmc{tmc_iter}{poison_tag}.pkl"
@@ -290,7 +290,7 @@ def main():
     # Setup early stopping log file if enabled
     if log_early_stopping:
         setting_name = os.path.basename(shapley_path).replace('.pkl', '')
-        early_stop_dir = f"{base_path}/shapley/{method_dir}/early_stopping"
+        early_stop_dir = f"{detection_base_path}/shapley/{method_dir}/early_stopping"
         os.makedirs(early_stop_dir, exist_ok=True)
         early_stop_path = f"{early_stop_dir}/{setting_name}.txt"
         
@@ -454,6 +454,94 @@ def main():
     print("\n" + "="*80)
 
     # ===== 9) 결과 저장 (txt) =====
+    def add_early_stopping_info(f, es_base_path, method_dir, shapley_path, log_early_stopping):
+        if not log_early_stopping:
+            return
+        
+        setting_name = os.path.basename(shapley_path).replace('.pkl', '')
+        early_stop_dir = f"{es_base_path}/shapley/{method_dir}/early_stopping"
+        early_stop_path = f"{early_stop_dir}/{setting_name}.txt"
+        
+        if not os.path.exists(early_stop_path):
+            return
+        
+        with open(early_stop_path, 'r') as es_f:
+            lines = es_f.readlines()
+        
+        # Find data lines (skip header and statistics)
+        data_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if any(stripped.startswith(x) for x in ['TMC', '=', 'Dataset:', 'Mode:', 'Early stopping',
+                                                      'Iter', '----', 'Statistics:', 'Total', 'Overall',
+                                                      'Early stop', 'Early Stopping Distribution', 'Poison']):
+                continue
+            if stripped.startswith('- '):
+                continue
+            parts = stripped.split()
+            if '█' in stripped and not (len(parts) >= 5 and parts[0].isdigit()):
+                continue
+            if len(parts) >= 5 and parts[0].isdigit() and '/' in parts[2]:
+                data_lines.append(stripped)
+        
+        if not data_lines:
+            return
+        
+        early_stopped_count = sum(1 for line in data_lines if 'Early Stop' in line)
+        completed_count = sum(1 for line in data_lines if 'Complete' in line)
+        total_count = len(data_lines)
+        
+        percentages = []
+        iter_stop_points = []
+        
+        for line in data_lines:
+            parts = line.split()
+            if len(parts) >= 5:
+                iter_num = int(parts[0])
+                pct_str = parts[4].rstrip('%')
+                pct = float(pct_str)
+                percentages.append(pct)
+                iter_stop_points.append((iter_num, pct))
+        
+        f.write(f"\n")
+        f.write(f"early stopping statistics:\n")
+        f.write(f"total iterations: {total_count}\n")
+        f.write(f"early stopped: {early_stopped_count} ({early_stopped_count/total_count*100:.1f}%)\n")
+        f.write(f"completed: {completed_count} ({completed_count/total_count*100:.1f}%)\n")
+        
+        if percentages:
+            avg_pct = np.mean(percentages)
+            f.write(f"average early stop: {avg_pct:.2f}%\n")
+        
+        f.write(f"\n")
+        f.write(f"distribution by percentage range:\n")
+        bins = [(i, i+10) for i in range(0, 100, 10)]
+        bin_counts = [0] * len(bins)
+        
+        for pct in percentages:
+            bin_idx = min(int(pct // 10), 9)
+            bin_counts[bin_idx] += 1
+        
+        max_count = max(bin_counts) if bin_counts else 1
+        bar_width = 40
+        
+        for i, (start, end) in enumerate(bins):
+            count = bin_counts[i]
+            pct_of_total = (count / total_count * 100) if total_count > 0 else 0
+            bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+            bar = '█' * bar_length
+            f.write(f"{start:3d}-{end:3d}%: {count:4d} ({pct_of_total:5.1f}%) {bar}\n")
+        
+        f.write(f"\n")
+        f.write(f"iteration early stop points (%):\n")
+        max_iter = max(iter_num for iter_num, _ in iter_stop_points) if iter_stop_points else 0
+        iter_width = len(str(max_iter))
+        
+        for iter_num, pct in iter_stop_points:
+            f.write(f"{iter_num:{iter_width}d}: {pct:5.1f}%\n")
+
     shapley_filename = os.path.basename(shapley_path).replace('.pkl', '')
     predictions_filename = f"{shapley_filename}_detection.txt"
     predictions_txt_path = f"{detection_base_path}/shapley/{method_dir}/predictions/{predictions_filename}"
@@ -483,6 +571,9 @@ def main():
         f.write(f"{[int(round(r * 10000)) for r in detection_rates]}\n")
         f.write(f"\nrandom baseline (x10000):\n")
         f.write(f"{[int(round(r * 10000)) for r in random_rates]}\n")
+
+        # Add early stopping statistics if flag is enabled
+        add_early_stopping_info(f, detection_base_path, method_dir, shapley_path, log_early_stopping)
 
     print(f"[info] saved detection results to {predictions_txt_path}")
 
