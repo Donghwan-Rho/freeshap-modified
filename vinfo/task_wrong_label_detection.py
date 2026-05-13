@@ -220,7 +220,7 @@ def main():
     # ===== 1) NTK 캐시 로드 (indices도 같이 로드) =====
     # NTK는 라벨과 무관하므로 기존 캐시 그대로 사용
     ntk_path = (
-        f"{base_path}/ntk/{model_name}"
+        f"./freeshap_res/ntk/{dataset_name}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
     )
     print(f"[info] ntk_path = {ntk_path}")
@@ -279,8 +279,9 @@ def main():
 
     poison_tag = f"_poison{poison_pct}"
 
+    shapley_base = f"./freeshap_res/shapley/{dataset_name}"
     shapley_path = (
-        f"{detection_base_path}/shapley/{method_dir}/results/{model_name}"
+        f"{shapley_base}/{method_dir}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}"
         f"{extra_tag}_sign{signgd}_earlystop{early_stopping}"
         f"_tmc{tmc_iter}{poison_tag}.pkl"
@@ -290,26 +291,13 @@ def main():
     # Setup early stopping log file if enabled
     if log_early_stopping:
         setting_name = os.path.basename(shapley_path).replace('.pkl', '')
-        early_stop_dir = f"{detection_base_path}/shapley/{method_dir}/early_stopping"
+        early_stop_dir = f"{detection_base_path}/{method_dir}/early_stopping"
         os.makedirs(early_stop_dir, exist_ok=True)
         early_stop_path = f"{early_stop_dir}/{setting_name}.txt"
         
-        k_width = len(str(num_train_dp))
-        n_width = len(str(num_train_dp))
-        with open(early_stop_path, 'a') as f:
-            f.write(f"TMC Iteration Log\n")
-            f.write(f"{'='*60}\n")
-            f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
-            f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {seed}\n")
-            f.write(f"Poison: {poison_pct}%\n")
-            f.write(f"Early stopping enabled: {early_stopping}\n")
-            f.write(f"\n{'Iter':<6} {'k':>{k_width}} / {'n':<{n_width}} {'Pct':>7} {'Status':<12}\n")
-            f.write(f"{'-'*6} {'-'*k_width}   {'-'*n_width} {'-'*7} {'-'*12}\n")
-        
-        dshap_com.early_stopping_log_path = early_stop_path
-        dshap_com._log_k_width = k_width
-        dshap_com._log_n_width = n_width
-        dshap_com._log_iter = 0
+        # Just enable logging - will write all at once after computation
+        dshap_com.log_early_stopping = True
+        dshap_com._log_iter = 0  # Counter for iteration number
         print(f"[info] Early stopping log will be written to: {early_stop_path}")
 
     # ===== 4) Shapley 로드 or 계산 =====
@@ -351,6 +339,76 @@ def main():
         shapley_computation_time = time.time() - shapley_start_time
         timing_info['shapley_computation'] = shapley_computation_time
         print(f"[TIMING] Shapley computation time: {shapley_computation_time:.4f}s")
+        
+        # Write early stopping log if enabled (all at once after computation)
+        if log_early_stopping and hasattr(dshap_com, 'early_stopping_records') and dshap_com.early_stopping_records:
+            records = dshap_com.early_stopping_records
+            
+            # Write header and all records to file at once
+            k_width = len(str(num_train_dp))
+            n_width = len(str(num_train_dp))
+            
+            with open(early_stop_path, 'a') as f:
+                # Write header
+                f.write(f"TMC Iteration Log\n")
+                f.write(f"{'='*60}\n")
+                f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
+                f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {seed}\n")
+                f.write(f"Poison: {poison_pct}%\n")
+                f.write(f"Early stopping enabled: {early_stopping}\n")
+                f.write(f"\n{'Iter':<6} {'k':>{k_width}} / {'n':<{n_width}} {'Pct':>7} {'Status':<12}\n")
+                f.write(f"{'-'*6} {'-'*k_width}   {'-'*n_width} {'-'*7} {'-'*12}\n")
+                
+                # Write all iteration records
+                for record in records:
+                    f.write(f"{record['iter']:<6} {record['k']:>{k_width}} / {record['n']:<{n_width}} {record['percentage']:>6.2f}% {record['status']:<12}\n")
+                
+                # Calculate and write statistics
+                early_stopped_count = sum(1 for r in records if r['status'] == 'Early Stop')
+                completed_count = sum(1 for r in records if r['status'] == 'Complete')
+                total_count = len(records)
+                
+                k_values = [r['k'] for r in records]
+                n_values = [r['n'] for r in records]
+                percentages = [r['percentage'] for r in records]
+                early_k_values = [r['k'] for r in records if r['status'] == 'Early Stop']
+                
+                # Calculate distribution by percentage ranges
+                bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+                distribution = {f"{bins[i]}-{bins[i+1]}%": 0 for i in range(len(bins)-1)}
+                
+                for pct in percentages:
+                    for i in range(len(bins)-1):
+                        if bins[i] <= pct < bins[i+1] or (i == len(bins)-2 and pct == 100):
+                            distribution[f"{bins[i]}-{bins[i+1]}%"] += 1
+                            break
+                
+                # Write statistics
+                f.write(f"\n{'='*60}\n")
+                f.write(f"Statistics:\n")
+                f.write(f"  Total iterations: {total_count}\n")
+                f.write(f"  - Early stopped: {early_stopped_count} ({early_stopped_count/total_count*100:.1f}%)\n")
+                f.write(f"  - Completed: {completed_count} ({completed_count/total_count*100:.1f}%)\n")
+                if k_values:
+                    avg_k = np.mean(k_values)
+                    avg_n = np.mean(n_values)
+                    avg_pct = (avg_k / avg_n) * 100
+                    f.write(f"  Overall average: {avg_k:.1f} / {avg_n:.1f} ({avg_pct:.2f}%)\n")
+                if early_k_values:
+                    avg_early_k = np.mean(early_k_values)
+                    avg_early_pct = (avg_early_k / n_values[0]) * 100
+                    f.write(f"  Early stop avg: {avg_early_k:.1f} / {n_values[0]:.1f} ({avg_early_pct:.2f}%)\n")
+                
+                # Write distribution
+                f.write(f"\n{'-'*60}\n")
+                f.write(f"Early Stopping Distribution:\n")
+                for range_label in [f"{bins[i]}-{bins[i+1]}%" for i in range(len(bins)-1)]:
+                    count = distribution[range_label]
+                    pct_of_total = (count / total_count) * 100 if total_count > 0 else 0
+                    bar = '█' * int(pct_of_total / 2)  # Visual bar (each █ = 2%)
+                    f.write(f"  {range_label:>8}: {count:>4} ({pct_of_total:>5.1f}%) {bar}\n")
+            
+            print(f"[info] Early stopping log saved to {early_stop_path}")
 
         result = {
             "dv_result": dv_result,
@@ -544,7 +602,7 @@ def main():
 
     shapley_filename = os.path.basename(shapley_path).replace('.pkl', '')
     predictions_filename = f"{shapley_filename}_detection.txt"
-    predictions_txt_path = f"{detection_base_path}/shapley/{method_dir}/predictions/{predictions_filename}"
+    predictions_txt_path = f"{detection_base_path}/{method_dir}/predictions/{predictions_filename}"
     os.makedirs(os.path.dirname(predictions_txt_path), exist_ok=True)
 
     with open(predictions_txt_path, 'a') as f:
@@ -579,7 +637,7 @@ def main():
 
     # ===== 10) 결과 저장 (pkl) =====
     pkl_filename = f"{shapley_filename}_detection.pkl"
-    pkl_path = f"{detection_base_path}/shapley/{method_dir}/predictions/{pkl_filename}"
+    pkl_path = f"{detection_base_path}/{method_dir}/predictions/{pkl_filename}"
 
     detection_bundle = {
         "args": vars(args),

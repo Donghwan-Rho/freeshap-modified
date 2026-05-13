@@ -261,22 +261,8 @@ def main():
         os.makedirs(early_stop_dir, exist_ok=True)
         early_stop_path = f"{early_stop_dir}/{setting_name}.txt"
         
-        # Write header
-        k_width = len(str(num_train_dp))
-        n_width = len(str(num_train_dp))
-        with open(early_stop_path, 'a') as f:
-            f.write(f"TMC Iteration Log\n")
-            f.write(f"{'='*60}\n")
-            f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
-            f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {seed}\n")
-            f.write(f"Early stopping enabled: {early_stopping}\n")
-            f.write(f"\n{'Iter':<6} {'k':>{k_width}} / {'n':<{n_width}} {'Pct':>7} {'Status':<12}\n")
-            f.write(f"{'-'*6} {'-'*k_width}   {'-'*n_width} {'-'*7} {'-'*12}\n")
-        
-        # Set the log path and formatting widths in dshap_com
-        dshap_com.early_stopping_log_path = early_stop_path
-        dshap_com._log_k_width = k_width
-        dshap_com._log_n_width = n_width
+        # Just enable logging - will write all at once after computation
+        dshap_com.log_early_stopping = True
         dshap_com._log_iter = 0  # Counter for iteration number
         print(f"[info] Early stopping log will be written to: {early_stop_path}")
     
@@ -321,45 +307,37 @@ def main():
         timing_info['shapley_computation'] = shapley_computation_time
         print(f"[TIMING] Shapley computation time: {shapley_computation_time:.4f}s")
         
-        # Append statistics to early stopping log if enabled
-        if log_early_stopping and os.path.exists(early_stop_path):
-            # Count lines to get statistics
-            with open(early_stop_path, 'r') as f:
-                lines = f.readlines()
+        # Write early stopping log if enabled (all at once after computation)
+        if log_early_stopping and hasattr(dshap_com, 'early_stopping_records') and dshap_com.early_stopping_records:
+            records = dshap_com.early_stopping_records
             
-            # Find data lines (skip header)
-            data_lines = []
-            for line in lines:
-                if line.strip() and not line.startswith('TMC') and not line.startswith('=') and \
-                   not line.startswith('Dataset') and not line.startswith('Mode') and \
-                   not line.startswith('Early stopping') and not line.startswith('Iter') and \
-                   not line.startswith('-'):
-                    data_lines.append(line.strip())
+            # Write header and all records to file at once
+            k_width = len(str(num_train_dp))
+            n_width = len(str(num_train_dp))
             
-            if data_lines:
-                # Parse statistics
-                early_stopped_count = sum(1 for line in data_lines if 'Early Stop' in line)
-                completed_count = sum(1 for line in data_lines if 'Complete' in line)
-                total_count = len(data_lines)
+            with open(early_stop_path, 'a') as f:
+                # Write header
+                f.write(f"TMC Iteration Log\n")
+                f.write(f"{'='*60}\n")
+                f.write(f"Dataset: {dataset_name}, Train: {num_train_dp}, Val: {val_sample_num}\n")
+                f.write(f"Mode: {approximate}, TMC iterations: {tmc_iter}, Seed: {seed}\n")
+                f.write(f"Early stopping enabled: {early_stopping}\n")
+                f.write(f"\n{'Iter':<6} {'k':>{k_width}} / {'n':<{n_width}} {'Pct':>7} {'Status':<12}\n")
+                f.write(f"{'-'*6} {'-'*k_width}   {'-'*n_width} {'-'*7} {'-'*12}\n")
                 
-                # Calculate averages
-                k_values = []
-                n_values = []
-                early_k_values = []
-                percentages = []
-                for line in data_lines:
-                    parts = line.split()
-                    if len(parts) >= 5:
-                        k = int(parts[1])
-                        n = int(parts[3])
-                        # Extract percentage (remove % sign)
-                        pct_str = parts[4].rstrip('%')
-                        pct = float(pct_str)
-                        k_values.append(k)
-                        n_values.append(n)
-                        percentages.append(pct)
-                        if 'Early Stop' in line:
-                            early_k_values.append(k)
+                # Write all iteration records
+                for record in records:
+                    f.write(f"{record['iter']:<6} {record['k']:>{k_width}} / {record['n']:<{n_width}} {record['percentage']:>6.2f}% {record['status']:<12}\n")
+                
+                # Calculate and write statistics
+                early_stopped_count = sum(1 for r in records if r['status'] == 'Early Stop')
+                completed_count = sum(1 for r in records if r['status'] == 'Complete')
+                total_count = len(records)
+                
+                k_values = [r['k'] for r in records]
+                n_values = [r['n'] for r in records]
+                percentages = [r['percentage'] for r in records]
+                early_k_values = [r['k'] for r in records if r['status'] == 'Early Stop']
                 
                 # Calculate distribution by percentage ranges
                 bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
@@ -371,31 +349,30 @@ def main():
                             distribution[f"{bins[i]}-{bins[i+1]}%"] += 1
                             break
                 
-                # Append statistics
-                with open(early_stop_path, 'a') as f:
-                    f.write(f"\n{'='*60}\n")
-                    f.write(f"Statistics:\n")
-                    f.write(f"  Total iterations: {total_count}\n")
-                    f.write(f"  - Early stopped: {early_stopped_count} ({early_stopped_count/total_count*100:.1f}%)\n")
-                    f.write(f"  - Completed: {completed_count} ({completed_count/total_count*100:.1f}%)\n")
-                    if k_values:
-                        avg_k = np.mean(k_values)
-                        avg_n = np.mean(n_values)
-                        avg_pct = (avg_k / avg_n) * 100
-                        f.write(f"  Overall average: {avg_k:.1f} / {avg_n:.1f} ({avg_pct:.2f}%)\n")
-                    if early_k_values:
-                        avg_early_k = np.mean(early_k_values)
-                        avg_early_pct = (avg_early_k / n_values[0]) * 100
-                        f.write(f"  Early stop avg: {avg_early_k:.1f} / {n_values[0]:.1f} ({avg_early_pct:.2f}%)\n")
-                    
-                    # Write distribution
-                    f.write(f"\n{'-'*60}\n")
-                    f.write(f"Early Stopping Distribution:\n")
-                    for range_label in [f"{bins[i]}-{bins[i+1]}%" for i in range(len(bins)-1)]:
-                        count = distribution[range_label]
-                        pct_of_total = (count / total_count) * 100 if total_count > 0 else 0
-                        bar = '█' * int(pct_of_total / 2)  # Visual bar (each █ = 2%)
-                        f.write(f"  {range_label:>8}: {count:>4} ({pct_of_total:>5.1f}%) {bar}\n")
+                # Write statistics
+                f.write(f"\n{'='*60}\n")
+                f.write(f"Statistics:\n")
+                f.write(f"  Total iterations: {total_count}\n")
+                f.write(f"  - Early stopped: {early_stopped_count} ({early_stopped_count/total_count*100:.1f}%)\n")
+                f.write(f"  - Completed: {completed_count} ({completed_count/total_count*100:.1f}%)\n")
+                if k_values:
+                    avg_k = np.mean(k_values)
+                    avg_n = np.mean(n_values)
+                    avg_pct = (avg_k / avg_n) * 100
+                    f.write(f"  Overall average: {avg_k:.1f} / {avg_n:.1f} ({avg_pct:.2f}%)\n")
+                if early_k_values:
+                    avg_early_k = np.mean(early_k_values)
+                    avg_early_pct = (avg_early_k / n_values[0]) * 100
+                    f.write(f"  Early stop avg: {avg_early_k:.1f} / {n_values[0]:.1f} ({avg_early_pct:.2f}%)\n")
+                
+                # Write distribution
+                f.write(f"\n{'-'*60}\n")
+                f.write(f"Early Stopping Distribution:\n")
+                for range_label in [f"{bins[i]}-{bins[i+1]}%" for i in range(len(bins)-1)]:
+                    count = distribution[range_label]
+                    pct_of_total = (count / total_count) * 100 if total_count > 0 else 0
+                    bar = '█' * int(pct_of_total / 2)  # Visual bar (each █ = 2%)
+                    f.write(f"  {range_label:>8}: {count:>4} ({pct_of_total:>5.1f}%) {bar}\n")
             
             print(f"[info] Early stopping log saved to {early_stop_path}")
 

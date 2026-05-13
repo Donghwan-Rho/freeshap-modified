@@ -183,7 +183,7 @@ def main():
 
     # ===== 1) NTK 캐시 로드 (indices도 같이 로드) =====
     ntk_path = (
-        f"{base_path}/ntk/{model_name}"
+        f"./freeshap_res/ntk/{dataset_name}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
     )
     print(f"[info] ntk_path = {ntk_path}")
@@ -243,8 +243,9 @@ def main():
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"
 
+    shapley_base = f"./freeshap_res/shapley/{dataset_name}"
     shapley_path = (
-        f"{base_path}/shapley/{method_dir}/results/{model_name}"
+        f"{shapley_base}/{method_dir}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}"
         f"{extra_tag}_sign{signgd}_earlystop{early_stopping}"
         f"_tmc{tmc_iter}.pkl"
@@ -520,7 +521,7 @@ def main():
     
     # ===== Save predictions to txt file =====
     predictions_filename = shapley_path.split('/')[-1].replace('.pkl', '_predictions.txt')
-    predictions_txt_path = f"{data_removing_base_path}/shapley/{method_dir}/predictions/{predictions_filename}"
+    predictions_txt_path = f"{data_removing_base_path}/{method_dir}/predictions/{predictions_filename}"
     os.makedirs(os.path.dirname(predictions_txt_path), exist_ok=True)
     
     with open(predictions_txt_path, 'a') as f:
