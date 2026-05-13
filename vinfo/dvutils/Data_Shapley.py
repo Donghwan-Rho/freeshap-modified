@@ -75,6 +75,8 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
         self.initialize_ntk_state = False
         self.early_stopping_log_path = None  # File path for real-time logging
         self.log_early_stopping = False  # Flag to enable early stopping logging
+        self.early_stopping_records = []  # Store records in memory instead of writing to file immediately
+        self._log_iter = 0  # Counter for iteration number
 
     def tmc_one_iteration_idx(self, target_idx=0, approximate=False):
         idxs = np.random.permutation(self.n_participants)
@@ -176,15 +178,21 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
                 else:
                     truncation_counter = 0
         
-        # Record to file in real-time
-        if self.log_early_stopping and self.early_stopping_log_path:
+        # Record to memory instead of file for performance
+        if self.log_early_stopping:
             self._log_iter += 1
             k = len(selected_idx)
             n = self.n_participants
             percentage = (k / n) * 100
             status = "Early Stop" if early_stopped else "Complete"
-            with open(self.early_stopping_log_path, 'a') as f:
-                f.write(f"{self._log_iter:<6} {k:>{self._log_k_width}} / {n:<{self._log_n_width}} {percentage:>6.2f}% {status:<12}\n")
+            # Store in memory instead of writing to file
+            self.early_stopping_records.append({
+                'iter': self._log_iter,
+                'k': k,
+                'n': n,
+                'percentage': percentage,
+                'status': status
+            })
 
         self.mc_cache.append(np.copy(marginal_contribs))
         self.ac_cache.append(np.copy(tmp_inspect))
@@ -237,15 +245,21 @@ class Fast_Data_Shapley(Adpt_Shapley, InitYAMLObject):
                 else:
                     truncation_counter = 0
         
-        # Record to file in real-time
-        if self.log_early_stopping and self.early_stopping_log_path:
+        # Record to memory instead of file for performance
+        if self.log_early_stopping:
             self._log_iter += 1
             k = len(selected_idx)
             n = self.n_participants
             percentage = (k / n) * 100
             status = "Early Stop" if early_stopped else "Complete"
-            with open(self.early_stopping_log_path, 'a') as f:
-                f.write(f"{self._log_iter:<6} {k:>{self._log_k_width}} / {n:<{self._log_n_width}} {percentage:>6.2f}% {status:<12}\n")
+            # Store in memory instead of writing to file
+            self.early_stopping_records.append({
+                'iter': self._log_iter,
+                'k': k,
+                'n': n,
+                'percentage': percentage,
+                'status': status
+            })
 
         _tmc_compute(idxs=idxs, marginal_contribs=marginal_contribs)
         self.probe_model.pre_inv = None

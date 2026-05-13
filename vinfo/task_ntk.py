@@ -44,6 +44,8 @@ def parse_args():
     parser.add_argument("--num_train_dp", type=int, default=8530)
     parser.add_argument("--val_sample_num", type=int, default=None,
                         help="Number of validation samples. If None, use entire validation set.")
+    parser.add_argument("--config", type=str, default="ntk_prompt",
+                        help="YAML config name without .yaml extension (e.g., ntk_prompt, ntk_llama)")
     return parser.parse_args()
 
 
@@ -59,8 +61,8 @@ def main():
     signgd = False
 
     # Dynamic path construction based on dataset_name
-    yaml_path = f"../configs/dshap/{dataset_name}/ntk_prompt.yaml"
-    base_path = f"./freeshap_res/{dataset_name}"
+    yaml_path = f"../configs/dshap/{dataset_name}/{args.config}.yaml"
+    base_path = f"./freeshap_res/ntk/{dataset_name}"
     os.makedirs(base_path, exist_ok=True)
 
     torch.manual_seed(seed)
@@ -137,9 +139,9 @@ def main():
         model_name = 'model'
 
     # ===== NTK 캐시 경로 =====
-    os.makedirs(f"{base_path}/ntk", exist_ok=True)
+    os.makedirs(base_path, exist_ok=True)
     ntk_path = (
-        f"{base_path}/ntk/{model_name}"
+        f"{base_path}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
     )
     print(f"[info] ntk_path = {ntk_path}")
