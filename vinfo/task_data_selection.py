@@ -336,12 +336,12 @@ def main():
         print(f"top: {top_results}")
         print(f"random:\n{random_results}")
     elif approximate == "eigen":
-        print(f"\n[Eigen mode with lambda={eigen_lambda_}]")
-        print(f"top: {top_results_eigen}")
-        print(f"random:\n{random_results_eigen}")
         print(f"\n[INV mode with lambda={inv_lambda_}]")
         print(f"top: {top_results_inv}")
         print(f"random:\n{random_results_inv}")
+        print(f"\n[Eigen mode with lambda={eigen_lambda_}]")
+        print(f"top: {top_results_eigen}")
+        print(f"random:\n{random_results_eigen}")
 
     # ===== 6) predictions.txt 저장 =====
     predictions_txt_path = f"{ds_base}/{method_dir}/predictions/{setting_name}_predictions.txt"
@@ -364,13 +364,13 @@ def main():
             f.write(f"top:\n{top_results}\n")
             f.write(f"random:\n{random_results}\n")
         elif approximate == "eigen":
-            f.write(f"eigen mode lambda={eigen_lambda_:.0e}\n")
-            f.write(f"top:\n{top_results_eigen}\n")
-            f.write(f"random:\n{random_results_eigen}\n")
-            f.write(f"\n")
             f.write(f"inv mode lambda={inv_lambda_:.0e}\n")
             f.write(f"top:\n{top_results_inv}\n")
             f.write(f"random:\n{random_results_inv}\n")
+            f.write(f"\n")
+            f.write(f"eigen mode lambda={eigen_lambda_:.0e}\n")
+            f.write(f"top:\n{top_results_eigen}\n")
+            f.write(f"random:\n{random_results_eigen}\n")
 
         # Timing info from pkl
         if timing_info:
