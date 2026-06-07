@@ -24,13 +24,19 @@ def parse_args():
     parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
     parser.add_argument("--approximate", type=str, default="inv",
-                        choices=["inv", "eigen", "none"])
+                        choices=["inv", "eigen", "nystrom", "none"])
     parser.add_argument("--eigen_rank", type=float, default=30,
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10% of data)")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
                         help="Lambda (regularization parameter) for INV mode")
     parser.add_argument("--eigen_lambda_", type=float, default=1e-2,
                         help="Lambda (regularization parameter) for Eigen mode")
+    parser.add_argument("--nystrom_d", type=int, default=512,
+                        help="Number of random landmarks for Nystrom approximation")
+    parser.add_argument("--landmark_seed", type=int, default=1234,
+                        help="RNG seed for landmark sampling (Nystrom)")
+    parser.add_argument("--nystrom_lambda_", type=float, default=1e-3,
+                        help="Lambda (ridge regularization) for Nystrom mode (friend's default = 1e-3)")
     parser.add_argument("--num_train_selected_list", type=int, nargs='+', 
                         default=[i for i in range(1, 101)],
                         help="List of percentages (1-100) of num_train_dp to use as training data")
@@ -98,6 +104,15 @@ def main():
             dtype=eigen_dtype,
             seed=seed
         )
+    elif approximate == "nystrom":
+        probe_model.set_nystrom_params(
+            d=int(args.nystrom_d),
+            lam=float(args.nystrom_lambda_),
+            solver=eigen_solver,
+            dtype=eigen_dtype,
+            landmark_seed=int(args.landmark_seed),
+            jitter=1e-8,
+        )
     elif approximate == "inv":
         probe_model.set_inv_params(lam=inv_lambda_)
 
@@ -121,6 +136,13 @@ def main():
         eigen_lam_str = f"{eigen_lambda_:.0e}"
         inv_lam_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_eig{eigen_rank_pct}_eiglam{eigen_lam_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
+    elif approximate == "nystrom":
+        nys_lam_str = f"{float(args.nystrom_lambda_):.0e}"
+        inv_lam_str = f"{inv_lambda_:.0e}"
+        extra_tag = (
+            f"_nys{int(args.nystrom_d)}_landseed{int(args.landmark_seed)}"
+            f"_nyslam{nys_lam_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
+        )
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"
@@ -171,10 +193,13 @@ def main():
     val_set = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
     probe_model.get_train_labels(train_set)
 
-    # eigen이면 feature 준비
+    # eigen / nystrom 이면 feature 준비
     if approximate == "eigen":
         print("[info] Preparing eigen regression features...")
         probe_model.prepare_eigen_regression()
+    elif approximate == "nystrom":
+        print("[info] Preparing Nystrom regression features...")
+        probe_model.prepare_nystrom_regression()
 
     print("len(train_set) =", len(train_set))
     print("len(val_set)   =", len(val_set))
@@ -203,7 +228,7 @@ def main():
     if approximate == "inv":
         top_results = []
         random_results = []
-    elif approximate == "eigen":
+    elif approximate in ("eigen", "nystrom"):
         top_results_eigen = []
         random_results_eigen = []
         top_results_inv = []
@@ -247,10 +272,12 @@ def main():
             )
             random_results.append(int(torch.round(acc * 10000).item()))
 
-    elif approximate == "eigen":
-        probe_model.eigen_decom_mode = "top"
+    elif approximate in ("eigen", "nystrom"):
+        if approximate == "eigen":
+            probe_model.eigen_decom_mode = "top"
+        approx_label = "EIGEN" if approximate == "eigen" else "NYSTROM"
 
-        print("[info] Running EIGEN mode predictions (top)...")
+        print(f"[info] Running {approx_label} mode predictions (top)...")
         for num_train_selected_pct in num_train_selected_list:
             k = int(num_train_dp * num_train_selected_pct / 100)
             k = int(min(k, len(acc_sum_per_train)))
@@ -265,7 +292,7 @@ def main():
             )
             top_results_eigen.append(int(torch.round(acc * 10000).item()))
 
-        print("[info] Running EIGEN mode predictions (random)...")
+        print(f"[info] Running {approx_label} mode predictions (random)...")
         for num_train_selected_pct in num_train_selected_list:
             k = int(num_train_dp * num_train_selected_pct / 100)
             k = int(min(k, len(acc_sum_per_train)))
@@ -319,27 +346,39 @@ def main():
             )
             random_results_inv.append(int(torch.round(acc * 10000).item()))
 
-        # Restore original EIGEN mode
-        print("[info] Restoring EIGEN mode...")
+        # Restore original low-rank mode
+        print(f"[info] Restoring {approx_label} mode...")
         probe_model.approximate_ntk = original_approx
-        probe_model.set_eigen_params(
-            rank=eigen_rank,
-            lam=eigen_lambda_,
-            solver=eigen_solver,
-            dtype=eigen_dtype,
-            seed=seed
-        )
+        if approximate == "eigen":
+            probe_model.set_eigen_params(
+                rank=eigen_rank,
+                lam=eigen_lambda_,
+                solver=eigen_solver,
+                dtype=eigen_dtype,
+                seed=seed
+            )
+        elif approximate == "nystrom":
+            probe_model.set_nystrom_params(
+                d=int(args.nystrom_d),
+                lam=float(args.nystrom_lambda_),
+                solver=eigen_solver,
+                dtype=eigen_dtype,
+                landmark_seed=int(args.landmark_seed),
+                jitter=1e-8,
+            )
 
     # Print results
     if approximate == "inv":
         print(f"\n[INV mode with lambda={inv_lambda_}]")
         print(f"top: {top_results}")
         print(f"random:\n{random_results}")
-    elif approximate == "eigen":
+    elif approximate in ("eigen", "nystrom"):
         print(f"\n[INV mode with lambda={inv_lambda_}]")
         print(f"top: {top_results_inv}")
         print(f"random:\n{random_results_inv}")
-        print(f"\n[Eigen mode with lambda={eigen_lambda_}]")
+        lr_label = "Eigen" if approximate == "eigen" else "Nystrom"
+        lr_lam = eigen_lambda_ if approximate == "eigen" else float(args.nystrom_lambda_)
+        print(f"\n[{lr_label} mode with lambda={lr_lam}]")
         print(f"top: {top_results_eigen}")
         print(f"random:\n{random_results_eigen}")
 
@@ -356,6 +395,9 @@ def main():
         if approximate == "eigen":
             f.write(f"eigen rank: {eigen_rank_pct}% (actual: {eigen_rank})\n")
             f.write(f"solver: {eigen_solver}, dtype: {eigen_dtype}\n")
+        elif approximate == "nystrom":
+            f.write(f"nystrom d: {int(args.nystrom_d)}, landmark_seed: {int(args.landmark_seed)}\n")
+            f.write(f"solver: {eigen_solver}, dtype: {eigen_dtype}\n")
 
         f.write(f"\n")
 
@@ -363,12 +405,15 @@ def main():
             f.write(f"inv mode lambda={inv_lambda_:.0e}\n")
             f.write(f"top:\n{top_results}\n")
             f.write(f"random:\n{random_results}\n")
-        elif approximate == "eigen":
+        elif approximate in ("eigen", "nystrom"):
             f.write(f"inv mode lambda={inv_lambda_:.0e}\n")
             f.write(f"top:\n{top_results_inv}\n")
             f.write(f"random:\n{random_results_inv}\n")
             f.write(f"\n")
-            f.write(f"eigen mode lambda={eigen_lambda_:.0e}\n")
+            if approximate == "eigen":
+                f.write(f"eigen mode lambda={eigen_lambda_:.0e}\n")
+            else:
+                f.write(f"nystrom mode lambda={float(args.nystrom_lambda_):.0e}\n")
             f.write(f"top:\n{top_results_eigen}\n")
             f.write(f"random:\n{random_results_eigen}\n")
 
@@ -455,7 +500,7 @@ def main():
     # not happen for num_train_dp>=100).
     pct_to_idx = {pct: i for i, pct in enumerate(num_train_selected_list)}
 
-    if approximate in ("inv", "eigen"):
+    if approximate in ("inv", "eigen", "nystrom"):
         base_dir = f"{ds_base}/{method_dir}/base_accuracy"
         os.makedirs(base_dir, exist_ok=True)
         base_txt_path = f"{base_dir}/{setting_name}_base.txt"

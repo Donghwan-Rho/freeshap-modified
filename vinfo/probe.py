@@ -192,7 +192,8 @@ class PromptLLMProbe(Probe):
 from entks.ntk import compute_ntk, init_torch, process_args, slice_data
 from entks.nlpmodels import SentenceClassifier, PromptSentenceClassifier, PromptLLM
 from entks.ntk_regression import (NTKRegression, NTKRegression_correction_multiclass,
-                                  fastNTKRegression, shapleyNTKRegression, EigenNTKRegression)
+                                  fastNTKRegression, shapleyNTKRegression, EigenNTKRegression,
+                                  NystromNTKRegression)
 from easydict import EasyDict as edict
 import pprint
 
@@ -259,6 +260,16 @@ class NTKProbe(Probe):
         # INV mode lambda
         self.inv_lam = 1e-6  # Default regularization for inv mode
 
+        ## Nystrom parameters (mirror eigen state)
+        self.nystrom_d = None
+        self.nystrom_lam = 1e-6
+        self.nystrom_solver = "cholesky"
+        self.nystrom_dtype = torch.float64
+        self.nystrom_landmark_seed = 1234
+        self.nystrom_jitter = 1e-8
+        self.nystrom_regression = None
+        self.nystrom_regression_dict = {}  # keyed by landmark_seed
+
     def approximate(self, method='inv'):
         # method: diagonal, inv
         self.approximate_ntk = method
@@ -284,6 +295,21 @@ class NTKProbe(Probe):
         self.inv_lam = float(lam)
         # Invalidate cached pre_inv
         self.pre_inv = None
+
+    def set_nystrom_params(self, d: int, lam: float = 1e-6,
+                           solver: str = "cholesky",
+                           dtype: str = "float64",
+                           landmark_seed: int = 1234,
+                           jitter: float = 1e-8):
+        """Configure Nystrom approximation parameters (random landmarks)."""
+        self.nystrom_d = int(d)
+        self.nystrom_lam = float(lam)
+        self.nystrom_solver = solver
+        self.nystrom_dtype = torch.float64 if dtype == "float64" else torch.float32
+        self.nystrom_landmark_seed = int(landmark_seed)
+        self.nystrom_jitter = float(jitter)
+        self.nystrom_regression = None
+        self.nystrom_regression_dict = {}
 
     def invalidate_eigen_cache(self):
         self.eigen_regression = None
@@ -392,6 +418,35 @@ class NTKProbe(Probe):
         
         self.eigen_regression = self.eigen_regression_dict[mode_key]
 
+    def prepare_nystrom_regression(self):
+        """Prepare NystromNTKRegression model if in nystrom mode."""
+        if self.approximate_ntk != "nystrom":
+            return
+        if self.ntk is None:
+            raise RuntimeError("[nystrom] self.ntk is None. compute/load NTK first.")
+        if self.train_labels is None:
+            raise RuntimeError("[nystrom] self.train_labels is None. Call get_train_labels() first.")
+        if self.nystrom_d is None:
+            self.nystrom_d = 512  # default
+
+        key = int(self.nystrom_landmark_seed)
+        if key not in self.nystrom_regression_dict:
+            print(f"[NTKProbe] Initializing NystromNTKRegression (landmark_seed={key})...")
+            self.nystrom_regression_dict[key] = NystromNTKRegression(
+                ntk_full=self.ntk,
+                y_train=self.train_labels,
+                n_class=self.num_labels,
+                rank=self.nystrom_d,
+                lam=self.nystrom_lam,
+                solver=self.nystrom_solver,
+                dtype=self.nystrom_dtype,
+                device=self.device,
+                landmark_seed=key,
+                jitter=self.nystrom_jitter,
+            )
+            print(f"[NTKProbe] NystromNTKRegression ready (landmark_seed={key}).")
+        self.nystrom_regression = self.nystrom_regression_dict[key]
+
     def get_correction(self, full_train_set, full_test_set):
         """
         Compute initial logits to serve as correction term
@@ -445,12 +500,26 @@ class NTKProbe(Probe):
             self.prepare_eigen_regression()
             test_preds = self.eigen_regression(train_indices)
             test_labels = torch.tensor([i['label'] for i in test_set])
-            
+
             if per_point:
                 test_acc = (test_preds.argmax(dim=1) == test_labels).float()
                 test_loss = F.cross_entropy(test_preds, test_labels, reduction='none').detach().cpu().numpy()
                 return test_loss, test_acc
-            
+
+            test_acc = (test_preds.argmax(dim=1) == test_labels).float().mean()
+            test_loss = F.cross_entropy(test_preds, test_labels, reduction='mean').item()
+            return test_loss, test_acc
+
+        if self.approximate_ntk == 'nystrom':
+            self.prepare_nystrom_regression()
+            test_preds = self.nystrom_regression(train_indices)
+            test_labels = torch.tensor([i['label'] for i in test_set])
+
+            if per_point:
+                test_acc = (test_preds.argmax(dim=1) == test_labels).float()
+                test_loss = F.cross_entropy(test_preds, test_labels, reduction='none').detach().cpu().numpy()
+                return test_loss, test_acc
+
             test_acc = (test_preds.argmax(dim=1) == test_labels).float().mean()
             test_loss = F.cross_entropy(test_preds, test_labels, reduction='mean').item()
             return test_loss, test_acc
@@ -500,6 +569,24 @@ class NTKProbe(Probe):
 
     def kernel_regression_idx(self, train_indices, test_set, has_pre_inv=False):
         # perform kernel regression for given train dataset and test dataset, for robustness on large dataset
+
+        # eigen / nystrom branches: forward by index (no need to slice k_train/k_test)
+        if self.approximate_ntk == 'eigen':
+            self.prepare_eigen_regression()
+            test_preds = self.eigen_regression(train_indices).to('cpu')
+            test_labels = torch.tensor([i['label'] for i in test_set])
+            test_acc = (test_preds.argmax(dim=1) == test_labels).float().mean()
+            test_loss = F.cross_entropy(test_preds, test_labels, reduction='mean').item()
+            return test_loss, test_acc
+
+        if self.approximate_ntk == 'nystrom':
+            self.prepare_nystrom_regression()
+            test_preds = self.nystrom_regression(train_indices).to('cpu')
+            test_labels = torch.tensor([i['label'] for i in test_set])
+            test_acc = (test_preds.argmax(dim=1) == test_labels).float().mean()
+            test_loss = F.cross_entropy(test_preds, test_labels, reduction='mean').item()
+            return test_loss, test_acc
+
         #  select a proper submatrix from the full ntk matrix
         k_train = self.ntk[:, train_indices[:, None], train_indices]
         # print("train kernel shape:", k_train.shape)

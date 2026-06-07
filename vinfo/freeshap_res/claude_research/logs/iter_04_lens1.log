@@ -1,0 +1,53 @@
+==============================================================================
+lens1_label_shift.py — iteration 04 §2 BBSE / weighted risk
+==============================================================================
+[info] 79,700 cells, 52 settings
+[step 1] wrote /extdata1/donghwan/freeshap/vinfo/freeshap_res/claude_research/state/iteration_04/lens1_table.csv: 52 settings
+[step 1] wrote /extdata1/donghwan/freeshap/vinfo/freeshap_res/claude_research/state/iteration_04/lens1_cell_kl.csv: 775 cell-level KL entries
+[H1] n_settings (trainbal A1 r10 sel∈{1,2,3,5}) = 14
+[H2] n_settings (valbal sel=5) = 21
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/base/model.py:607: ConvergenceWarning: Maximum Likelihood optimization failed to converge. Check mle_retvals
+  warnings.warn("Maximum Likelihood optimization failed to "
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/regression/mixed_linear_model.py:2200: ConvergenceWarning: Retrying MixedLM optimization with lbfgs
+  warnings.warn(
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/base/model.py:607: ConvergenceWarning: Maximum Likelihood optimization failed to converge. Check mle_retvals
+  warnings.warn("Maximum Likelihood optimization failed to "
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/regression/mixed_linear_model.py:2200: ConvergenceWarning: Retrying MixedLM optimization with cg
+  warnings.warn(
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/base/model.py:607: ConvergenceWarning: Maximum Likelihood optimization failed to converge. Check mle_retvals
+  warnings.warn("Maximum Likelihood optimization failed to "
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/regression/mixed_linear_model.py:2206: ConvergenceWarning: MixedLM optimization failed, trying a different optimizer may help.
+  warnings.warn(msg, ConvergenceWarning)
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/regression/mixed_linear_model.py:2218: ConvergenceWarning: Gradient optimization failed, |grad| = 4.833300
+  warnings.warn(msg, ConvergenceWarning)
+/home/donghwan/.conda/envs/freeshap/lib/python3.10/site-packages/statsmodels/regression/mixed_linear_model.py:2237: ConvergenceWarning: The MLE may be on the boundary of the parameter space.
+  warnings.warn(msg, ConvergenceWarning)
+[step 2] wrote /extdata1/donghwan/freeshap/vinfo/freeshap_res/claude_research/state/iteration_04/lens1_corr.csv: 5 rows
+  hypothesis_id    predictor                  outcome    regime imbalance_level  n_settings  pearson_r  pearson_p  pearson_ci_lo  pearson_ci_hi  spearman_r  spearman_p  mixed_beta  mixed_ci_lo  mixed_ci_hi decision
+0            H1     kl_val_S  gap_top_random_balanced  trainbal             all          14  -0.001054   0.997148      -0.531336       0.529822   -0.144130    0.623013   -0.000513    -0.003317     0.002291   reject
+1      H1_strat     kl_val_S  gap_top_random_balanced  trainbal            mild          14  -0.001054   0.997148      -0.531336       0.529822   -0.144130    0.623013         NaN          NaN          NaN   reject
+2            H2  max_P_train   A1-LR balanced acc gap    valbal             all          21   0.709053   0.000320       0.399714       0.873401    0.719295    0.000238    0.254726     0.187779     0.321672  confirm
+3      H2_strat  max_P_train   A1-LR balanced acc gap    valbal            mild          14   0.477251   0.084405      -0.071411       0.804193    0.580178    0.029626         NaN          NaN          NaN  partial
+4      H2_strat  max_P_train   A1-LR balanced acc gap    valbal         extreme           7   0.801136   0.030334       0.121196       0.969371    0.612372    0.143811         NaN          NaN          NaN  partial
+[fig] H1_scatter.png
+[fig] H2_scatter.png
+
+[head] lens1_table.csv (first 5 rows):
+                                                      setting_id  dataset    regime train_ratio_tag              val_ratio_tag imbalance_level  C     n  n_val                 P_train_y                      P_val_y  kl_val_train  kl_train_val                                                                           w_vector  H_P_train   H_P_val  max_P_train  max_P_val  sigma_min_C_hat    cond_C_hat   bbse_err  risk_w_proxy_sel5  risk_w_proxy_sel10  risk_w_proxy_sel100
+0                 ag_news_cls25_25_25_25_valbal1000_n5000_nv1000  ag_news    valbal  cls25_25_25_25                 valbal1000            mild  4  5000   1000  [0.25, 0.25, 0.25, 0.25]     [0.25, 0.25, 0.25, 0.25]      0.000000      0.000000                                                               [1.0, 1.0, 1.0, 1.0]   1.386294  1.386294         0.25      0.250              0.0  5.000000e+11  12.000000                0.0              0.0000               0.0000
+1  ag_news_cls25_25_25_25_valimb1000_cls55_15_15_15_n5000_nv1000  ag_news  trainbal  cls25_25_25_25  valimb1000_cls55_15_15_15            mild  4  5000   1000  [0.25, 0.25, 0.25, 0.25]     [0.55, 0.15, 0.15, 0.15]      0.203780      0.186005                                                               [2.2, 0.6, 0.6, 0.6]   1.386294  1.182514         0.25      0.550              0.0  5.000000e+11  12.000000                0.3              0.2947              -0.0054
+2  ag_news_cls25_25_25_25_valimb1000_cls85_05_05_05_n5000_nv1000  ag_news  trainbal  cls25_25_25_25  valimb1000_cls85_05_05_05            mild  4  5000   1000  [0.25, 0.25, 0.25, 0.25]     [0.85, 0.05, 0.05, 0.05]      0.798793      0.901135                                                               [3.4, 0.2, 0.2, 0.2]   1.386294  0.587501         0.25      0.850              0.0  5.000000e+11  12.000000                0.6              0.6000              -0.0061
+3                    ag_news_cls55_15_15_15_val1000_n2000_nv1000  ag_news    single  cls55_15_15_15                    val1000            mild  4  2000   1000  [0.55, 0.15, 0.15, 0.15]  [0.235, 0.261, 0.254, 0.25]      0.206224      0.228972   [0.4272727272727272, 1.7400000000000002, 1.6933333333333334, 1.6666666666666667]   1.182514  1.385565         0.55      0.261              0.0  6.082763e+11   5.283538                0.0              0.0000               0.0000
+4                 ag_news_cls55_15_15_15_valbal1000_n5000_nv1000  ag_news    valbal  cls55_15_15_15                 valbal1000            mild  4  5000   1000  [0.55, 0.15, 0.15, 0.15]     [0.25, 0.25, 0.25, 0.25]      0.186005      0.203780  [0.45454545454545453, 1.6666666666666667, 1.6666666666666667, 1.6666666666666667]   1.182514  1.386294         0.55      0.250              0.0  6.082763e+11   5.356265                0.0              0.0000               0.0000
+
+[head] lens1_corr.csv:
+  hypothesis_id    predictor                  outcome    regime imbalance_level  n_settings  pearson_r  pearson_p  pearson_ci_lo  pearson_ci_hi  spearman_r  spearman_p  mixed_beta  mixed_ci_lo  mixed_ci_hi decision
+0            H1     kl_val_S  gap_top_random_balanced  trainbal             all          14  -0.001054   0.997148      -0.531336       0.529822   -0.144130    0.623013   -0.000513    -0.003317     0.002291   reject
+1      H1_strat     kl_val_S  gap_top_random_balanced  trainbal            mild          14  -0.001054   0.997148      -0.531336       0.529822   -0.144130    0.623013         NaN          NaN          NaN   reject
+2            H2  max_P_train   A1-LR balanced acc gap    valbal             all          21   0.709053   0.000320       0.399714       0.873401    0.719295    0.000238    0.254726     0.187779     0.321672  confirm
+3      H2_strat  max_P_train   A1-LR balanced acc gap    valbal            mild          14   0.477251   0.084405      -0.071411       0.804193    0.580178    0.029626         NaN          NaN          NaN  partial
+4      H2_strat  max_P_train   A1-LR balanced acc gap    valbal         extreme           7   0.801136   0.030334       0.121196       0.969371    0.612372    0.143811         NaN          NaN          NaN  partial
+
+[done] lens1_table rows: 52
+[done] lens1_cell_kl rows: 775
+[done] lens1_corr rows: 5

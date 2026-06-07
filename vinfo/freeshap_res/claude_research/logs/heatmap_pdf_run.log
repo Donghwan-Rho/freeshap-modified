@@ -1,0 +1,64 @@
+/extdata1/donghwan/freeshap/vinfo/freeshap_res/claude_research/experiments/make_lrfshap_vs_a1_valbal_pdf.py:892: MatplotlibDeprecationWarning: The get_cmap function was deprecated in Matplotlib 3.7 and will be removed two minor releases later. Use ``matplotlib.colormaps[name]`` or ``matplotlib.colormaps.get_cmap(obj)`` instead.
+  cmap = _cm.get_cmap("YlOrRd").copy()
+[plot] mrpc/pos50  n=2300  valbal=258
+[plot] mrpc/pos70  n=2300  valbal=258
+[plot] mrpc/pos90  n=2300  valbal=258
+[plot] sst2/pos50  n=5000  valbal=856
+[plot] sst2/pos70  n=5000  valbal=856
+[plot] sst2/pos90  n=5000  valbal=856
+[plot] mr/pos50  n=4500  valbal=1000
+[plot] mr/pos70  n=4500  valbal=1000
+[plot] mr/pos90  n=4500  valbal=1000
+[plot] qqp/pos50  n=5000  valbal=1000
+[plot] qqp/pos30  n=5000  valbal=1000
+[plot] qqp/pos10  n=5000  valbal=1000
+[plot] rte/pos50  n=1300  valbal=262
+[plot] rte/pos70  n=1300  valbal=262
+[plot] rte/pos90  n=1300  valbal=262
+[plot] ag_news/cls25_25_25_25  n=5000  valbal=1000
+[plot] ag_news/cls55_15_15_15  n=5000  valbal=1000
+[plot] ag_news/cls85_05_05_05  n=5000  valbal=1000
+[plot] mnli/cls33_33_33  n=5000  valbal=1000
+[plot] mnli/cls60_20_20  n=5000  valbal=1000
+[plot] mnli/cls90_05_05  n=5000  valbal=1000
+[top-class] mrpc/pos50  n=2300  valbal=258
+[top-class] mrpc/pos70  n=2300  valbal=258
+[top-class] mrpc/pos90  n=2300  valbal=258
+[top-class] sst2/pos50  n=5000  valbal=856
+[top-class] sst2/pos70  n=5000  valbal=856
+[top-class] sst2/pos90  n=5000  valbal=856
+[top-class] mr/pos50  n=4500  valbal=1000
+[top-class] mr/pos70  n=4500  valbal=1000
+[top-class] mr/pos90  n=4500  valbal=1000
+[top-class] qqp/pos50  n=5000  valbal=1000
+[top-class] qqp/pos30  n=5000  valbal=1000
+[top-class] qqp/pos10  n=5000  valbal=1000
+[top-class] rte/pos50  n=1300  valbal=262
+[top-class] rte/pos70  n=1300  valbal=262
+[top-class] rte/pos90  n=1300  valbal=262
+[top-class] ag_news/cls25_25_25_25  n=5000  valbal=1000
+[top-class] ag_news/cls55_15_15_15  n=5000  valbal=1000
+[top-class] ag_news/cls85_05_05_05  n=5000  valbal=1000
+[top-class] mnli/cls33_33_33  n=5000  valbal=1000
+[top-class] mnli/cls60_20_20  n=5000  valbal=1000
+[top-class] mnli/cls90_05_05  n=5000  valbal=1000
+[top-class] missing files (15):
+  - mnli/cls60_20_20 INV indices missing
+  - mnli/cls60_20_20 LR r=1% indices missing
+  - mnli/cls60_20_20 A1 r=1% indices missing
+  - mnli/cls60_20_20 LR r=5% indices missing
+  - mnli/cls60_20_20 A1 r=5% indices missing
+  - mnli/cls60_20_20 LR r=10% indices missing
+  - mnli/cls60_20_20 A1 r=10% indices missing
+  - mnli/cls60_20_20 LR r=15% indices missing
+  - mnli/cls60_20_20 A1 r=15% indices missing
+  - mnli/cls60_20_20 LR r=20% indices missing
+  - mnli/cls60_20_20 A1 r=20% indices missing
+  - mnli/cls60_20_20 LR r=25% indices missing
+  - mnli/cls60_20_20 A1 r=25% indices missing
+  - mnli/cls60_20_20 LR r=30% indices missing
+  - mnli/cls60_20_20 A1 r=30% indices missing
+[done] saved -> /extdata1/donghwan/freeshap/vinfo/freeshap_res/claude_research/reports/lrfshap_vs_a1_valbal.pdf
+[summary] pages = 48
+[summary] ratios processed = 21
+[summary] cells with '!' (harm) marker = 301 / 1029

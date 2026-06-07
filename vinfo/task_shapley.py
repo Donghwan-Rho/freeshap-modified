@@ -71,13 +71,19 @@ def parse_args():
     parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
     parser.add_argument("--approximate", type=str, default="inv",
-                        choices=["inv", "eigen", "none"])
+                        choices=["inv", "eigen", "nystrom", "none"])
     parser.add_argument("--eigen_rank", type=float, default=30,
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10% of data)")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
                         help="Lambda (regularization parameter) for INV mode")
     parser.add_argument("--eigen_lambda_", type=float, default=1e-2,
                         help="Lambda (regularization parameter) for Eigen mode")
+    parser.add_argument("--nystrom_d", type=int, default=512,
+                        help="Number of random landmarks for Nystrom approximation")
+    parser.add_argument("--landmark_seed", type=int, default=1234,
+                        help="RNG seed for landmark sampling (Nystrom)")
+    parser.add_argument("--nystrom_lambda_", type=float, default=1e-3,
+                        help="Lambda (ridge regularization) for Nystrom mode (friend's default = 1e-3)")
     parser.add_argument("--config", type=str, default="ntk_prompt",
                         help="YAML config name without .yaml extension (e.g., ntk_prompt, ntk_llama)")
     return parser.parse_args()
@@ -151,7 +157,16 @@ def main():
     # if hasattr(probe_model, "normalize_ntk"):
     #     probe_model.normalize_ntk()
 
-    if approximate == "eigen":
+    if approximate == "nystrom":
+        probe_model.set_nystrom_params(
+            d=int(args.nystrom_d),
+            lam=float(args.nystrom_lambda_),
+            solver=eigen_solver,
+            dtype=eigen_dtype,
+            landmark_seed=int(args.landmark_seed),
+            jitter=1e-8,
+        )
+    elif approximate == "eigen":
         probe_model.set_eigen_params(
             rank=eigen_rank,
             lam=eigen_lambda_,
@@ -211,7 +226,7 @@ def main():
         eigen_start_time = time_module.time()
         probe_model.prepare_eigen_regression()
         eigen_total_time = time_module.time() - eigen_start_time
-        
+
         # Get eigendecomposition time from the regression model
         if hasattr(probe_model, 'eigen_regression') and probe_model.eigen_regression is not None:
             eigendecom_time = probe_model.eigen_regression.eigen_decomposition_time
@@ -221,6 +236,17 @@ def main():
             print(f"[TIMING] Eigendecomposition time: {eigendecom_time:.4f}s")
             print(f"[TIMING] Total eigen preparation time: {eigen_total_time:.4f}s")
             print(f"[TIMING] Overhead (non-decomposition): {eigen_total_time - eigendecom_time:.4f}s")
+    elif approximate == "nystrom":
+        print("[info] Preparing Nystrom regression features...")
+        import time as time_module
+        nys_start_time = time_module.time()
+        probe_model.prepare_nystrom_regression()
+        nys_total_time = time_module.time() - nys_start_time
+        if hasattr(probe_model, 'nystrom_regression') and probe_model.nystrom_regression is not None:
+            feat_time = probe_model.nystrom_regression.eigen_decomposition_time
+            timing_info['nystrom_feature_time'] = feat_time
+            timing_info['nystrom_preparation_total'] = nys_total_time
+            print(f"[TIMING] Nystrom feature time: {feat_time:.4f}s")
 
     print("len(train_set) =", len(train_set))
     print("len(val_set)   =", len(val_set))
@@ -234,6 +260,13 @@ def main():
         inv_lam_str = f"{inv_lambda_:.0e}"
         # Use the percentage value itself (eigen_rank_pct) in filename
         extra_tag = f"_eig{eigen_rank_pct}_eiglam{eigen_lam_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
+    elif approximate == "nystrom":
+        nys_lam_str = f"{float(args.nystrom_lambda_):.0e}"
+        inv_lam_str = f"{inv_lambda_:.0e}"
+        extra_tag = (
+            f"_nys{int(args.nystrom_d)}_landseed{int(args.landmark_seed)}"
+            f"_nyslam{nys_lam_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
+        )
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"

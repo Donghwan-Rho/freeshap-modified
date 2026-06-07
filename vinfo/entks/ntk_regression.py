@@ -405,8 +405,84 @@ class EigenNTKRegression(nn.Module):
                     W = self._ridge_solve(PhiS, YS, effective_lam=effective_lam)
                 
                 test_preds = (self.phi_te @ W).to('cpu')
-        
+
         return test_preds
+
+
+################################### Kernel regression with Nystrom approximation (random landmarks) ################################
+class NystromNTKRegression(EigenNTKRegression):
+    """
+    Nystrom-feature variant of EigenNTKRegression.
+
+    The forward / Sherman-Morrison incremental update / Cholesky ridge solve
+    are inherited unchanged from EigenNTKRegression. Only the precompute step
+    is overridden: instead of computing the top-d eigen decomposition of the
+    train NTK, we sample d landmark training points (random with fixed seed)
+    and build the Nystrom features
+
+        Phi_tr = K(:, S_land) @ chol(W)^{-T},   W = K(S_land, S_land)
+        Phi_te = K_test(:, S_land) @ chol(W)^{-T}
+
+    so that K_train ≈ Phi_tr Phi_tr^T (Nystrom approximation).
+
+    Because A1's monkey-patch replaces ``EigenNTKRegression._precompute_eigen_features``
+    at the *class* level, defining our own override here keeps the Nystrom
+    branch label-blind (= random landmarks, never the A1 label-aware score).
+    """
+
+    def __init__(self, ntk_full, y_train, n_class, rank=512, lam=1e-6,
+                 solver="cholesky", dtype=torch.float32, device='cuda:0',
+                 landmark_seed=1234, jitter=1e-8):
+        # store nystrom-specific config BEFORE super().__init__ (super calls
+        # our overridden _precompute_eigen_features which needs these fields).
+        self._landmark_seed = int(landmark_seed)
+        self._nystrom_jitter = float(jitter)
+        super().__init__(ntk_full, y_train, n_class,
+                         rank=rank, lam=lam, solver=solver, dtype=dtype,
+                         device=device, eigen_decom_mode="top",
+                         seed=int(landmark_seed))
+
+    def _precompute_eigen_features(self, ntk_full):
+        """Random-landmark Nystrom features (replaces eigen decomposition)."""
+        print("[NystromNTKRegression] Computing Nystrom features (random landmarks)...")
+        t0 = time.time()
+
+        if ntk_full.ndim == 3:
+            ntk0 = ntk_full[0].detach()
+        else:
+            ntk0 = ntk_full.detach()
+        ntk0 = ntk0.to("cpu", dtype=torch.float64)
+        n_total, n_train = ntk0.shape
+
+        K_trtr = ntk0[:n_train, :].numpy()
+        K_tetr = ntk0[n_train:, :].numpy()
+        K_sym = 0.5 * (K_trtr + K_trtr.T)
+
+        d = int(min(self.rank, n_train))
+
+        # random landmark indices (fixed seed for reproducibility)
+        rng = np.random.RandomState(self._landmark_seed)
+        S_land = np.sort(rng.choice(n_train, size=d, replace=False))
+
+        # Nystrom features (formula from friend's shapley_nystrome_fixedbasis2.py)
+        W = K_sym[np.ix_(S_land, S_land)]   # (d, d)
+        C_tr = K_sym[:, S_land]             # (n_train, d)
+        C_te = K_tetr[:, S_land]            # (n_test, d)
+
+        jitter_eye = self._nystrom_jitter * np.eye(d, dtype=np.float64)
+        Lw = np.linalg.cholesky(W + jitter_eye)
+        # Phi = C @ Lw^{-T}, solved as Lw^T x = C^T  ->  x.T = Phi
+        Phi_tr = np.linalg.solve(Lw.T, C_tr.T).T  # (n_train, d)
+        Phi_te = np.linalg.solve(Lw.T, C_te.T).T  # (n_test, d)
+
+        decomp_time = time.time() - t0
+        self.eigen_decomposition_time = decomp_time
+        print(f"[NystromNTKRegression] Done (n_train={n_train}, d={d}, "
+              f"landmark_seed={self._landmark_seed}) in {decomp_time:.4f}s")
+
+        phi_tr = torch.from_numpy(Phi_tr).to(device=self.device, dtype=self.dtype)
+        phi_te = torch.from_numpy(Phi_te).to(device=self.device, dtype=self.dtype)
+        return phi_tr, phi_te
 
 
 ################################### Kernel regression with Dynamic Programming INVerse ################################
