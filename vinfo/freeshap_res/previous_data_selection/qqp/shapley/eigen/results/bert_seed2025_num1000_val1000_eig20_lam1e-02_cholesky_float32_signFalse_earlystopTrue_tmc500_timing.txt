@@ -1,0 +1,17 @@
+TIMING SUMMARY
+================================================================================
+
+GPU Information:
+----------------------------------------
+used_gpu_count: 1
+gpu_index: cuda:0
+gpu_model: NVIDIA GeForce RTX 2080 Ti
+----------------------------------------
+
+Timing Measurements:
+----------------------------------------
+eigendecomposition: 0.2699s
+eigen_preparation_total: 0.3016s
+eigen_preparation_overhead: 0.0317s
+shapley_computation: 746.4470s
+================================================================================

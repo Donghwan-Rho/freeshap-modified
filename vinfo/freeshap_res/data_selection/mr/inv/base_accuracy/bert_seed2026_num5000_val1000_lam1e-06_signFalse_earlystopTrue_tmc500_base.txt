@@ -1,0 +1,4 @@
+inv_base_accuracy:
+5030
+inv_top_f20_accuracy:
+8530

@@ -1,0 +1,529 @@
+TMC Iteration Log
+============================================================
+Dataset: rte, Train: 2490, Val: 277
+Mode: inv, TMC iterations: 500, Seed: 2025
+Early stopping enabled: True
+
+Iter      k / n        Pct Status      
+------ ----   ---- ------- ------------
+1      1392 / 2490  55.90% Early Stop  
+2      2483 / 2490  99.72% Early Stop  
+3       841 / 2490  33.78% Early Stop  
+4       473 / 2490  19.00% Early Stop  
+5      2481 / 2490  99.64% Early Stop  
+6      2429 / 2490  97.55% Early Stop  
+7      2184 / 2490  87.71% Early Stop  
+8       405 / 2490  16.27% Early Stop  
+9      2490 / 2490 100.00% Complete    
+10     2490 / 2490 100.00% Complete    
+11     2477 / 2490  99.48% Early Stop  
+12     2490 / 2490 100.00% Early Stop  
+13     2437 / 2490  97.87% Early Stop  
+14     2357 / 2490  94.66% Early Stop  
+15     2401 / 2490  96.43% Early Stop  
+16     2490 / 2490 100.00% Complete    
+17     2490 / 2490 100.00% Complete    
+18      612 / 2490  24.58% Early Stop  
+19     2484 / 2490  99.76% Early Stop  
+20     2488 / 2490  99.92% Early Stop  
+21     2486 / 2490  99.84% Early Stop  
+22     2457 / 2490  98.67% Early Stop  
+23     1441 / 2490  57.87% Early Stop  
+24     2487 / 2490  99.88% Early Stop  
+25     2384 / 2490  95.74% Early Stop  
+26     2469 / 2490  99.16% Early Stop  
+27     2488 / 2490  99.92% Early Stop  
+28     2482 / 2490  99.68% Early Stop  
+29     2249 / 2490  90.32% Early Stop  
+30     2487 / 2490  99.88% Early Stop  
+31     2296 / 2490  92.21% Early Stop  
+32     2447 / 2490  98.27% Early Stop  
+33     2343 / 2490  94.10% Early Stop  
+34     2490 / 2490 100.00% Complete    
+35     1999 / 2490  80.28% Early Stop  
+36     2487 / 2490  99.88% Early Stop  
+37      803 / 2490  32.25% Early Stop  
+38     1866 / 2490  74.94% Early Stop  
+39     2250 / 2490  90.36% Early Stop  
+40     1950 / 2490  78.31% Early Stop  
+41     2347 / 2490  94.26% Early Stop  
+42     2471 / 2490  99.24% Early Stop  
+43     1310 / 2490  52.61% Early Stop  
+44     2490 / 2490 100.00% Complete    
+45     1054 / 2490  42.33% Early Stop  
+46     2488 / 2490  99.92% Early Stop  
+47     2488 / 2490  99.92% Early Stop  
+48     2490 / 2490 100.00% Early Stop  
+49     2484 / 2490  99.76% Early Stop  
+50     2490 / 2490 100.00% Early Stop  
+51     2490 / 2490 100.00% Complete    
+52     2490 / 2490 100.00% Complete    
+53     2490 / 2490 100.00% Early Stop  
+54     2490 / 2490 100.00% Complete    
+55     2489 / 2490  99.96% Early Stop  
+56     2490 / 2490 100.00% Early Stop  
+57     2490 / 2490 100.00% Early Stop  
+58     2486 / 2490  99.84% Early Stop  
+59     2355 / 2490  94.58% Early Stop  
+60     2312 / 2490  92.85% Early Stop  
+61     2489 / 2490  99.96% Early Stop  
+62     2487 / 2490  99.88% Early Stop  
+63     2489 / 2490  99.96% Early Stop  
+64     2485 / 2490  99.80% Early Stop  
+65     2489 / 2490  99.96% Early Stop  
+66     2147 / 2490  86.22% Early Stop  
+67     2490 / 2490 100.00% Early Stop  
+68     2478 / 2490  99.52% Early Stop  
+69     1669 / 2490  67.03% Early Stop  
+70     2490 / 2490 100.00% Complete    
+71     2480 / 2490  99.60% Early Stop  
+72     2431 / 2490  97.63% Early Stop  
+73     2478 / 2490  99.52% Early Stop  
+74     2476 / 2490  99.44% Early Stop  
+75      333 / 2490  13.37% Early Stop  
+76     2489 / 2490  99.96% Early Stop  
+77     2482 / 2490  99.68% Early Stop  
+78     2489 / 2490  99.96% Early Stop  
+79     2476 / 2490  99.44% Early Stop  
+80     2489 / 2490  99.96% Early Stop  
+81     2463 / 2490  98.92% Early Stop  
+82     1388 / 2490  55.74% Early Stop  
+83     2487 / 2490  99.88% Early Stop  
+84     2393 / 2490  96.10% Early Stop  
+85     2489 / 2490  99.96% Early Stop  
+86     2489 / 2490  99.96% Early Stop  
+87     1293 / 2490  51.93% Early Stop  
+88      813 / 2490  32.65% Early Stop  
+89     1709 / 2490  68.63% Early Stop  
+90     2487 / 2490  99.88% Early Stop  
+91     2362 / 2490  94.86% Early Stop  
+92     2489 / 2490  99.96% Early Stop  
+93     2439 / 2490  97.95% Early Stop  
+94     2490 / 2490 100.00% Complete    
+95     2457 / 2490  98.67% Early Stop  
+96     2472 / 2490  99.28% Early Stop  
+97     2437 / 2490  97.87% Early Stop  
+98     2489 / 2490  99.96% Early Stop  
+99     2487 / 2490  99.88% Early Stop  
+100    2487 / 2490  99.88% Early Stop  
+101    2480 / 2490  99.60% Early Stop  
+102    2483 / 2490  99.72% Early Stop  
+103     780 / 2490  31.33% Early Stop  
+104    2483 / 2490  99.72% Early Stop  
+105    2477 / 2490  99.48% Early Stop  
+106    2472 / 2490  99.28% Early Stop  
+107    2478 / 2490  99.52% Early Stop  
+108    2489 / 2490  99.96% Early Stop  
+109    2436 / 2490  97.83% Early Stop  
+110    2466 / 2490  99.04% Early Stop  
+111    2490 / 2490 100.00% Complete    
+112    2489 / 2490  99.96% Early Stop  
+113    2486 / 2490  99.84% Early Stop  
+114    2471 / 2490  99.24% Early Stop  
+115    2490 / 2490 100.00% Complete    
+116    2370 / 2490  95.18% Early Stop  
+117    2406 / 2490  96.63% Early Stop  
+118    1324 / 2490  53.17% Early Stop  
+119    2480 / 2490  99.60% Early Stop  
+120    2490 / 2490 100.00% Early Stop  
+121    1692 / 2490  67.95% Early Stop  
+122    2456 / 2490  98.63% Early Stop  
+123    2482 / 2490  99.68% Early Stop  
+124    1911 / 2490  76.75% Early Stop  
+125    2482 / 2490  99.68% Early Stop  
+126    2150 / 2490  86.35% Early Stop  
+127    2475 / 2490  99.40% Early Stop  
+128    2490 / 2490 100.00% Complete    
+129     545 / 2490  21.89% Early Stop  
+130    2490 / 2490 100.00% Complete    
+131    2073 / 2490  83.25% Early Stop  
+132    2490 / 2490 100.00% Early Stop  
+133    2469 / 2490  99.16% Early Stop  
+134    2385 / 2490  95.78% Early Stop  
+135    2490 / 2490 100.00% Complete    
+136    2482 / 2490  99.68% Early Stop  
+137    2458 / 2490  98.71% Early Stop  
+138    1220 / 2490  49.00% Early Stop  
+139    2304 / 2490  92.53% Early Stop  
+140    2320 / 2490  93.17% Early Stop  
+141    2486 / 2490  99.84% Early Stop  
+142    2483 / 2490  99.72% Early Stop  
+143     985 / 2490  39.56% Early Stop  
+144    2233 / 2490  89.68% Early Stop  
+145    2490 / 2490 100.00% Early Stop  
+146    2485 / 2490  99.80% Early Stop  
+147      88 / 2490   3.53% Early Stop  
+148    2480 / 2490  99.60% Early Stop  
+149    2482 / 2490  99.68% Early Stop  
+150     405 / 2490  16.27% Early Stop  
+151    2440 / 2490  97.99% Early Stop  
+152    2490 / 2490 100.00% Complete    
+153    2482 / 2490  99.68% Early Stop  
+154    2477 / 2490  99.48% Early Stop  
+155    2444 / 2490  98.15% Early Stop  
+156    2489 / 2490  99.96% Early Stop  
+157    1580 / 2490  63.45% Early Stop  
+158    2490 / 2490 100.00% Early Stop  
+159    2490 / 2490 100.00% Complete    
+160    2476 / 2490  99.44% Early Stop  
+161    2478 / 2490  99.52% Early Stop  
+162    2490 / 2490 100.00% Complete    
+163    2476 / 2490  99.44% Early Stop  
+164    2356 / 2490  94.62% Early Stop  
+165    2490 / 2490 100.00% Complete    
+166    2443 / 2490  98.11% Early Stop  
+167    1175 / 2490  47.19% Early Stop  
+168    2489 / 2490  99.96% Early Stop  
+169    2484 / 2490  99.76% Early Stop  
+170    2490 / 2490 100.00% Complete    
+171    2480 / 2490  99.60% Early Stop  
+172    2490 / 2490 100.00% Complete    
+173    2488 / 2490  99.92% Early Stop  
+174    2489 / 2490  99.96% Early Stop  
+175    2469 / 2490  99.16% Early Stop  
+176    2257 / 2490  90.64% Early Stop  
+177    2487 / 2490  99.88% Early Stop  
+178    2431 / 2490  97.63% Early Stop  
+179    2488 / 2490  99.92% Early Stop  
+180    2015 / 2490  80.92% Early Stop  
+181    2489 / 2490  99.96% Early Stop  
+182    2445 / 2490  98.19% Early Stop  
+183    2023 / 2490  81.24% Early Stop  
+184    2098 / 2490  84.26% Early Stop  
+185    2478 / 2490  99.52% Early Stop  
+186    2490 / 2490 100.00% Early Stop  
+187    2483 / 2490  99.72% Early Stop  
+188    2386 / 2490  95.82% Early Stop  
+189    2490 / 2490 100.00% Complete    
+190    1519 / 2490  61.00% Early Stop  
+191    2305 / 2490  92.57% Early Stop  
+192    2482 / 2490  99.68% Early Stop  
+193    2361 / 2490  94.82% Early Stop  
+194    2193 / 2490  88.07% Early Stop  
+195    1061 / 2490  42.61% Early Stop  
+196    1976 / 2490  79.36% Early Stop  
+197    2366 / 2490  95.02% Early Stop  
+198    2474 / 2490  99.36% Early Stop  
+199    2488 / 2490  99.92% Early Stop  
+200    2111 / 2490  84.78% Early Stop  
+201    2490 / 2490 100.00% Early Stop  
+202    2490 / 2490 100.00% Early Stop  
+203    2187 / 2490  87.83% Early Stop  
+204    2482 / 2490  99.68% Early Stop  
+205     218 / 2490   8.76% Early Stop  
+206    2432 / 2490  97.67% Early Stop  
+207    2490 / 2490 100.00% Early Stop  
+208    2489 / 2490  99.96% Early Stop  
+209    2020 / 2490  81.12% Early Stop  
+210    2435 / 2490  97.79% Early Stop  
+211    2484 / 2490  99.76% Early Stop  
+212    2485 / 2490  99.80% Early Stop  
+213    2380 / 2490  95.58% Early Stop  
+214    2476 / 2490  99.44% Early Stop  
+215    2490 / 2490 100.00% Early Stop  
+216    2490 / 2490 100.00% Early Stop  
+217    2257 / 2490  90.64% Early Stop  
+218    2395 / 2490  96.18% Early Stop  
+219    2488 / 2490  99.92% Early Stop  
+220    2490 / 2490 100.00% Early Stop  
+221    2490 / 2490 100.00% Complete    
+222    2490 / 2490 100.00% Complete    
+223    1744 / 2490  70.04% Early Stop  
+224    2335 / 2490  93.78% Early Stop  
+225    2386 / 2490  95.82% Early Stop  
+226     537 / 2490  21.57% Early Stop  
+227    2483 / 2490  99.72% Early Stop  
+228    2477 / 2490  99.48% Early Stop  
+229    2490 / 2490 100.00% Complete    
+230     842 / 2490  33.82% Early Stop  
+231    1545 / 2490  62.05% Early Stop  
+232    2456 / 2490  98.63% Early Stop  
+233    2066 / 2490  82.97% Early Stop  
+234    2328 / 2490  93.49% Early Stop  
+235    2464 / 2490  98.96% Early Stop  
+236     287 / 2490  11.53% Early Stop  
+237    2484 / 2490  99.76% Early Stop  
+238    2490 / 2490 100.00% Complete    
+239    2472 / 2490  99.28% Early Stop  
+240    2488 / 2490  99.92% Early Stop  
+241    2456 / 2490  98.63% Early Stop  
+242    1675 / 2490  67.27% Early Stop  
+243    1390 / 2490  55.82% Early Stop  
+244    2484 / 2490  99.76% Early Stop  
+245    2490 / 2490 100.00% Complete    
+246    2268 / 2490  91.08% Early Stop  
+247    2488 / 2490  99.92% Early Stop  
+248    2470 / 2490  99.20% Early Stop  
+249    1900 / 2490  76.31% Early Stop  
+250    2490 / 2490 100.00% Early Stop  
+251    1392 / 2490  55.90% Early Stop  
+252    2049 / 2490  82.29% Early Stop  
+253    2484 / 2490  99.76% Early Stop  
+254    2490 / 2490 100.00% Complete    
+255    2468 / 2490  99.12% Early Stop  
+256    1059 / 2490  42.53% Early Stop  
+257    2469 / 2490  99.16% Early Stop  
+258    2473 / 2490  99.32% Early Stop  
+259    2471 / 2490  99.24% Early Stop  
+260    2490 / 2490 100.00% Complete    
+261    2483 / 2490  99.72% Early Stop  
+262    2480 / 2490  99.60% Early Stop  
+263    2005 / 2490  80.52% Early Stop  
+264    2456 / 2490  98.63% Early Stop  
+265    2490 / 2490 100.00% Early Stop  
+266    2227 / 2490  89.44% Early Stop  
+267    2223 / 2490  89.28% Early Stop  
+268    1821 / 2490  73.13% Early Stop  
+269    1571 / 2490  63.09% Early Stop  
+270    2490 / 2490 100.00% Complete    
+271    1373 / 2490  55.14% Early Stop  
+272    2484 / 2490  99.76% Early Stop  
+273    2233 / 2490  89.68% Early Stop  
+274    2460 / 2490  98.80% Early Stop  
+275     625 / 2490  25.10% Early Stop  
+276    2490 / 2490 100.00% Complete    
+277    2476 / 2490  99.44% Early Stop  
+278    2480 / 2490  99.60% Early Stop  
+279    2490 / 2490 100.00% Early Stop  
+280    2453 / 2490  98.51% Early Stop  
+281    2457 / 2490  98.67% Early Stop  
+282    2489 / 2490  99.96% Early Stop  
+283    1135 / 2490  45.58% Early Stop  
+284    2488 / 2490  99.92% Early Stop  
+285    2466 / 2490  99.04% Early Stop  
+286    2490 / 2490 100.00% Early Stop  
+287    2466 / 2490  99.04% Early Stop  
+288    2487 / 2490  99.88% Early Stop  
+289    2464 / 2490  98.96% Early Stop  
+290    2414 / 2490  96.95% Early Stop  
+291    2490 / 2490 100.00% Early Stop  
+292    2489 / 2490  99.96% Early Stop  
+293    2471 / 2490  99.24% Early Stop  
+294    2480 / 2490  99.60% Early Stop  
+295    2477 / 2490  99.48% Early Stop  
+296    2273 / 2490  91.29% Early Stop  
+297    2490 / 2490 100.00% Complete    
+298    2490 / 2490 100.00% Complete    
+299    2484 / 2490  99.76% Early Stop  
+300    2467 / 2490  99.08% Early Stop  
+301    1722 / 2490  69.16% Early Stop  
+302    2489 / 2490  99.96% Early Stop  
+303    2335 / 2490  93.78% Early Stop  
+304     689 / 2490  27.67% Early Stop  
+305    2470 / 2490  99.20% Early Stop  
+306    2463 / 2490  98.92% Early Stop  
+307    2490 / 2490 100.00% Complete    
+308    1237 / 2490  49.68% Early Stop  
+309    1543 / 2490  61.97% Early Stop  
+310    2471 / 2490  99.24% Early Stop  
+311    2447 / 2490  98.27% Early Stop  
+312     498 / 2490  20.00% Early Stop  
+313     470 / 2490  18.88% Early Stop  
+314    2490 / 2490 100.00% Early Stop  
+315    2019 / 2490  81.08% Early Stop  
+316    2490 / 2490 100.00% Early Stop  
+317    2489 / 2490  99.96% Early Stop  
+318    2483 / 2490  99.72% Early Stop  
+319    2458 / 2490  98.71% Early Stop  
+320    2473 / 2490  99.32% Early Stop  
+321    1568 / 2490  62.97% Early Stop  
+322    2490 / 2490 100.00% Complete    
+323    2489 / 2490  99.96% Early Stop  
+324    2485 / 2490  99.80% Early Stop  
+325    2035 / 2490  81.73% Early Stop  
+326    2434 / 2490  97.75% Early Stop  
+327    2373 / 2490  95.30% Early Stop  
+328    2452 / 2490  98.47% Early Stop  
+329    2476 / 2490  99.44% Early Stop  
+330    2468 / 2490  99.12% Early Stop  
+331    2490 / 2490 100.00% Complete    
+332    2482 / 2490  99.68% Early Stop  
+333    2463 / 2490  98.92% Early Stop  
+334    2440 / 2490  97.99% Early Stop  
+335    2469 / 2490  99.16% Early Stop  
+336    2469 / 2490  99.16% Early Stop  
+337     914 / 2490  36.71% Early Stop  
+338    2490 / 2490 100.00% Complete    
+339    2490 / 2490 100.00% Complete    
+340    2488 / 2490  99.92% Early Stop  
+341    2487 / 2490  99.88% Early Stop  
+342    2490 / 2490 100.00% Complete    
+343    2157 / 2490  86.63% Early Stop  
+344    2486 / 2490  99.84% Early Stop  
+345    2273 / 2490  91.29% Early Stop  
+346    2435 / 2490  97.79% Early Stop  
+347    2466 / 2490  99.04% Early Stop  
+348    2383 / 2490  95.70% Early Stop  
+349    2438 / 2490  97.91% Early Stop  
+350    2481 / 2490  99.64% Early Stop  
+351    2484 / 2490  99.76% Early Stop  
+352    2486 / 2490  99.84% Early Stop  
+353    2490 / 2490 100.00% Early Stop  
+354    2415 / 2490  96.99% Early Stop  
+355    2485 / 2490  99.80% Early Stop  
+356    2451 / 2490  98.43% Early Stop  
+357    2470 / 2490  99.20% Early Stop  
+358    2485 / 2490  99.80% Early Stop  
+359    2481 / 2490  99.64% Early Stop  
+360    2490 / 2490 100.00% Complete    
+361    2316 / 2490  93.01% Early Stop  
+362    2337 / 2490  93.86% Early Stop  
+363    2490 / 2490 100.00% Early Stop  
+364    2361 / 2490  94.82% Early Stop  
+365    2476 / 2490  99.44% Early Stop  
+366    2490 / 2490 100.00% Early Stop  
+367    2483 / 2490  99.72% Early Stop  
+368    2490 / 2490 100.00% Early Stop  
+369    2442 / 2490  98.07% Early Stop  
+370    2478 / 2490  99.52% Early Stop  
+371    1752 / 2490  70.36% Early Stop  
+372    1843 / 2490  74.02% Early Stop  
+373    2417 / 2490  97.07% Early Stop  
+374     841 / 2490  33.78% Early Stop  
+375    1186 / 2490  47.63% Early Stop  
+376    2490 / 2490 100.00% Early Stop  
+377    2385 / 2490  95.78% Early Stop  
+378    2226 / 2490  89.40% Early Stop  
+379    2480 / 2490  99.60% Early Stop  
+380    2425 / 2490  97.39% Early Stop  
+381    2490 / 2490 100.00% Early Stop  
+382    2489 / 2490  99.96% Early Stop  
+383    2478 / 2490  99.52% Early Stop  
+384    2478 / 2490  99.52% Early Stop  
+385    2430 / 2490  97.59% Early Stop  
+386    2430 / 2490  97.59% Early Stop  
+387    2489 / 2490  99.96% Early Stop  
+388    2488 / 2490  99.92% Early Stop  
+389    2293 / 2490  92.09% Early Stop  
+390    2486 / 2490  99.84% Early Stop  
+391    2490 / 2490 100.00% Complete    
+392    2490 / 2490 100.00% Complete    
+393    2476 / 2490  99.44% Early Stop  
+394    2490 / 2490 100.00% Complete    
+395    1649 / 2490  66.22% Early Stop  
+396    1587 / 2490  63.73% Early Stop  
+397    2490 / 2490 100.00% Complete    
+398    2478 / 2490  99.52% Early Stop  
+399    2240 / 2490  89.96% Early Stop  
+400    1199 / 2490  48.15% Early Stop  
+401    2490 / 2490 100.00% Early Stop  
+402    2337 / 2490  93.86% Early Stop  
+403    2489 / 2490  99.96% Early Stop  
+404    2490 / 2490 100.00% Early Stop  
+405    2469 / 2490  99.16% Early Stop  
+406    2449 / 2490  98.35% Early Stop  
+407    2447 / 2490  98.27% Early Stop  
+408    1474 / 2490  59.20% Early Stop  
+409    2490 / 2490 100.00% Complete    
+410    2488 / 2490  99.92% Early Stop  
+411    1989 / 2490  79.88% Early Stop  
+412    2331 / 2490  93.61% Early Stop  
+413    2131 / 2490  85.58% Early Stop  
+414    2478 / 2490  99.52% Early Stop  
+415    1149 / 2490  46.14% Early Stop  
+416    2462 / 2490  98.88% Early Stop  
+417    2424 / 2490  97.35% Early Stop  
+418    2435 / 2490  97.79% Early Stop  
+419    1242 / 2490  49.88% Early Stop  
+420    2211 / 2490  88.80% Early Stop  
+421    2486 / 2490  99.84% Early Stop  
+422    2490 / 2490 100.00% Early Stop  
+423    1842 / 2490  73.98% Early Stop  
+424    2490 / 2490 100.00% Early Stop  
+425    2461 / 2490  98.84% Early Stop  
+426    2478 / 2490  99.52% Early Stop  
+427    2387 / 2490  95.86% Early Stop  
+428    1910 / 2490  76.71% Early Stop  
+429    2489 / 2490  99.96% Early Stop  
+430    2483 / 2490  99.72% Early Stop  
+431    2485 / 2490  99.80% Early Stop  
+432    2487 / 2490  99.88% Early Stop  
+433    2398 / 2490  96.31% Early Stop  
+434    2324 / 2490  93.33% Early Stop  
+435    2476 / 2490  99.44% Early Stop  
+436    2490 / 2490 100.00% Complete    
+437    1843 / 2490  74.02% Early Stop  
+438    2466 / 2490  99.04% Early Stop  
+439    2487 / 2490  99.88% Early Stop  
+440    1974 / 2490  79.28% Early Stop  
+441    2490 / 2490 100.00% Complete    
+442     858 / 2490  34.46% Early Stop  
+443    2172 / 2490  87.23% Early Stop  
+444    2482 / 2490  99.68% Early Stop  
+445    2437 / 2490  97.87% Early Stop  
+446    2464 / 2490  98.96% Early Stop  
+447    1246 / 2490  50.04% Early Stop  
+448    2489 / 2490  99.96% Early Stop  
+449    2490 / 2490 100.00% Complete    
+450    2483 / 2490  99.72% Early Stop  
+451     728 / 2490  29.24% Early Stop  
+452    2313 / 2490  92.89% Early Stop  
+453    2449 / 2490  98.35% Early Stop  
+454    2490 / 2490 100.00% Early Stop  
+455    2461 / 2490  98.84% Early Stop  
+456    2487 / 2490  99.88% Early Stop  
+457    2490 / 2490 100.00% Complete    
+458    2490 / 2490 100.00% Complete    
+459    2412 / 2490  96.87% Early Stop  
+460    2470 / 2490  99.20% Early Stop  
+461    1286 / 2490  51.65% Early Stop  
+462    2487 / 2490  99.88% Early Stop  
+463    2486 / 2490  99.84% Early Stop  
+464    2478 / 2490  99.52% Early Stop  
+465    2360 / 2490  94.78% Early Stop  
+466    2468 / 2490  99.12% Early Stop  
+467    2426 / 2490  97.43% Early Stop  
+468    2437 / 2490  97.87% Early Stop  
+469     800 / 2490  32.13% Early Stop  
+470     678 / 2490  27.23% Early Stop  
+471    2483 / 2490  99.72% Early Stop  
+472    2471 / 2490  99.24% Early Stop  
+473    2490 / 2490 100.00% Early Stop  
+474    2485 / 2490  99.80% Early Stop  
+475    2490 / 2490 100.00% Early Stop  
+476    2291 / 2490  92.01% Early Stop  
+477    2404 / 2490  96.55% Early Stop  
+478    2451 / 2490  98.43% Early Stop  
+479    2467 / 2490  99.08% Early Stop  
+480    1133 / 2490  45.50% Early Stop  
+481    2125 / 2490  85.34% Early Stop  
+482    2476 / 2490  99.44% Early Stop  
+483    2479 / 2490  99.56% Early Stop  
+484    2054 / 2490  82.49% Early Stop  
+485     515 / 2490  20.68% Early Stop  
+486    2285 / 2490  91.77% Early Stop  
+487     692 / 2490  27.79% Early Stop  
+488    2450 / 2490  98.39% Early Stop  
+489    2488 / 2490  99.92% Early Stop  
+490    1456 / 2490  58.47% Early Stop  
+491    2489 / 2490  99.96% Early Stop  
+492    2490 / 2490 100.00% Complete    
+493    2488 / 2490  99.92% Early Stop  
+494    2490 / 2490 100.00% Early Stop  
+495    2071 / 2490  83.17% Early Stop  
+496    2415 / 2490  96.99% Early Stop  
+497    2490 / 2490 100.00% Complete    
+498     747 / 2490  30.00% Early Stop  
+499    2485 / 2490  99.80% Early Stop  
+500    1345 / 2490  54.02% Early Stop  
+
+============================================================
+Statistics:
+  Total iterations: 500
+  - Early stopped: 447 (89.4%)
+  - Completed: 53 (10.6%)
+  Overall average: 2232.4 / 2490.0 (89.66%)
+  Early stop avg: 2201.9 / 2490.0 (88.43%)
+
+------------------------------------------------------------
+Early Stopping Distribution:
+     0-10%:    2 (  0.4%) 
+    10-20%:    6 (  1.2%) 
+    20-30%:   10 (  2.0%) █
+    30-40%:   11 (  2.2%) █
+    40-50%:   12 (  2.4%) █
+    50-60%:   14 (  2.8%) █
+    60-70%:   13 (  2.6%) █
+    70-80%:   14 (  2.8%) █
+    80-90%:   30 (  6.0%) ███
+   90-100%:  388 ( 77.6%) ██████████████████████████████████████

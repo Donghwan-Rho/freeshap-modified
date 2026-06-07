@@ -1,0 +1,16 @@
+inv_base_accuracy:
+2470
+inv_top_f1_accuracy:
+5470
+inv_top_f5_accuracy:
+8230
+inv_top_f10_accuracy:
+8600
+inv_top_f15_accuracy:
+8590
+inv_top_f20_accuracy:
+8700
+inv_top_f25_accuracy:
+8750
+inv_top_f30_accuracy:
+8730

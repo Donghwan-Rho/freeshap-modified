@@ -1,0 +1,529 @@
+TMC Iteration Log
+============================================================
+Dataset: rte, Train: 1000, Val: 277
+Mode: eigen, TMC iterations: 500, Seed: 2025
+Early stopping enabled: True
+
+Iter      k / n        Pct Status      
+------ ----   ---- ------- ------------
+1       383 / 1000  38.30% Early Stop  
+2       987 / 1000  98.70% Early Stop  
+3       989 / 1000  98.90% Early Stop  
+4       996 / 1000  99.60% Early Stop  
+5       996 / 1000  99.60% Early Stop  
+6       988 / 1000  98.80% Early Stop  
+7       995 / 1000  99.50% Early Stop  
+8       994 / 1000  99.40% Early Stop  
+9       972 / 1000  97.20% Early Stop  
+10      947 / 1000  94.70% Early Stop  
+11      972 / 1000  97.20% Early Stop  
+12      898 / 1000  89.80% Early Stop  
+13      996 / 1000  99.60% Early Stop  
+14      985 / 1000  98.50% Early Stop  
+15      948 / 1000  94.80% Early Stop  
+16      939 / 1000  93.90% Early Stop  
+17      986 / 1000  98.60% Early Stop  
+18      942 / 1000  94.20% Early Stop  
+19      968 / 1000  96.80% Early Stop  
+20      997 / 1000  99.70% Early Stop  
+21      537 / 1000  53.70% Early Stop  
+22      945 / 1000  94.50% Early Stop  
+23      979 / 1000  97.90% Early Stop  
+24      526 / 1000  52.60% Early Stop  
+25      788 / 1000  78.80% Early Stop  
+26      827 / 1000  82.70% Early Stop  
+27     1000 / 1000 100.00% Complete    
+28      434 / 1000  43.40% Early Stop  
+29      726 / 1000  72.60% Early Stop  
+30      880 / 1000  88.00% Early Stop  
+31      995 / 1000  99.50% Early Stop  
+32      981 / 1000  98.10% Early Stop  
+33      226 / 1000  22.60% Early Stop  
+34      986 / 1000  98.60% Early Stop  
+35      999 / 1000  99.90% Early Stop  
+36      735 / 1000  73.50% Early Stop  
+37      927 / 1000  92.70% Early Stop  
+38      344 / 1000  34.40% Early Stop  
+39      995 / 1000  99.50% Early Stop  
+40      949 / 1000  94.90% Early Stop  
+41      962 / 1000  96.20% Early Stop  
+42      957 / 1000  95.70% Early Stop  
+43      850 / 1000  85.00% Early Stop  
+44      999 / 1000  99.90% Early Stop  
+45      971 / 1000  97.10% Early Stop  
+46      967 / 1000  96.70% Early Stop  
+47      928 / 1000  92.80% Early Stop  
+48      991 / 1000  99.10% Early Stop  
+49      985 / 1000  98.50% Early Stop  
+50      994 / 1000  99.40% Early Stop  
+51      995 / 1000  99.50% Early Stop  
+52      997 / 1000  99.70% Early Stop  
+53      993 / 1000  99.30% Early Stop  
+54      986 / 1000  98.60% Early Stop  
+55      807 / 1000  80.70% Early Stop  
+56      925 / 1000  92.50% Early Stop  
+57      911 / 1000  91.10% Early Stop  
+58      944 / 1000  94.40% Early Stop  
+59      885 / 1000  88.50% Early Stop  
+60      633 / 1000  63.30% Early Stop  
+61      985 / 1000  98.50% Early Stop  
+62      800 / 1000  80.00% Early Stop  
+63      431 / 1000  43.10% Early Stop  
+64      714 / 1000  71.40% Early Stop  
+65      990 / 1000  99.00% Early Stop  
+66      935 / 1000  93.50% Early Stop  
+67      990 / 1000  99.00% Early Stop  
+68      994 / 1000  99.40% Early Stop  
+69      802 / 1000  80.20% Early Stop  
+70      959 / 1000  95.90% Early Stop  
+71      587 / 1000  58.70% Early Stop  
+72      993 / 1000  99.30% Early Stop  
+73      998 / 1000  99.80% Early Stop  
+74      735 / 1000  73.50% Early Stop  
+75      999 / 1000  99.90% Early Stop  
+76     1000 / 1000 100.00% Early Stop  
+77      665 / 1000  66.50% Early Stop  
+78      999 / 1000  99.90% Early Stop  
+79      718 / 1000  71.80% Early Stop  
+80      904 / 1000  90.40% Early Stop  
+81      980 / 1000  98.00% Early Stop  
+82      997 / 1000  99.70% Early Stop  
+83     1000 / 1000 100.00% Early Stop  
+84      563 / 1000  56.30% Early Stop  
+85      996 / 1000  99.60% Early Stop  
+86      984 / 1000  98.40% Early Stop  
+87      971 / 1000  97.10% Early Stop  
+88      919 / 1000  91.90% Early Stop  
+89      796 / 1000  79.60% Early Stop  
+90      930 / 1000  93.00% Early Stop  
+91      997 / 1000  99.70% Early Stop  
+92      969 / 1000  96.90% Early Stop  
+93      908 / 1000  90.80% Early Stop  
+94     1000 / 1000 100.00% Complete    
+95     1000 / 1000 100.00% Early Stop  
+96      952 / 1000  95.20% Early Stop  
+97     1000 / 1000 100.00% Complete    
+98      735 / 1000  73.50% Early Stop  
+99      990 / 1000  99.00% Early Stop  
+100     942 / 1000  94.20% Early Stop  
+101     990 / 1000  99.00% Early Stop  
+102     999 / 1000  99.90% Early Stop  
+103     797 / 1000  79.70% Early Stop  
+104     981 / 1000  98.10% Early Stop  
+105     825 / 1000  82.50% Early Stop  
+106     995 / 1000  99.50% Early Stop  
+107     993 / 1000  99.30% Early Stop  
+108     669 / 1000  66.90% Early Stop  
+109    1000 / 1000 100.00% Complete    
+110    1000 / 1000 100.00% Early Stop  
+111     551 / 1000  55.10% Early Stop  
+112     992 / 1000  99.20% Early Stop  
+113     995 / 1000  99.50% Early Stop  
+114     977 / 1000  97.70% Early Stop  
+115     991 / 1000  99.10% Early Stop  
+116     999 / 1000  99.90% Early Stop  
+117     996 / 1000  99.60% Early Stop  
+118     795 / 1000  79.50% Early Stop  
+119     991 / 1000  99.10% Early Stop  
+120    1000 / 1000 100.00% Complete    
+121     972 / 1000  97.20% Early Stop  
+122     909 / 1000  90.90% Early Stop  
+123     906 / 1000  90.60% Early Stop  
+124     846 / 1000  84.60% Early Stop  
+125    1000 / 1000 100.00% Complete    
+126     998 / 1000  99.80% Early Stop  
+127     854 / 1000  85.40% Early Stop  
+128    1000 / 1000 100.00% Complete    
+129     917 / 1000  91.70% Early Stop  
+130     950 / 1000  95.00% Early Stop  
+131    1000 / 1000 100.00% Complete    
+132    1000 / 1000 100.00% Early Stop  
+133     995 / 1000  99.50% Early Stop  
+134     591 / 1000  59.10% Early Stop  
+135    1000 / 1000 100.00% Early Stop  
+136     982 / 1000  98.20% Early Stop  
+137     975 / 1000  97.50% Early Stop  
+138    1000 / 1000 100.00% Early Stop  
+139     714 / 1000  71.40% Early Stop  
+140     600 / 1000  60.00% Early Stop  
+141     988 / 1000  98.80% Early Stop  
+142     978 / 1000  97.80% Early Stop  
+143     943 / 1000  94.30% Early Stop  
+144     853 / 1000  85.30% Early Stop  
+145     772 / 1000  77.20% Early Stop  
+146     996 / 1000  99.60% Early Stop  
+147     996 / 1000  99.60% Early Stop  
+148     692 / 1000  69.20% Early Stop  
+149     916 / 1000  91.60% Early Stop  
+150     987 / 1000  98.70% Early Stop  
+151     999 / 1000  99.90% Early Stop  
+152     499 / 1000  49.90% Early Stop  
+153     986 / 1000  98.60% Early Stop  
+154    1000 / 1000 100.00% Complete    
+155     998 / 1000  99.80% Early Stop  
+156     951 / 1000  95.10% Early Stop  
+157     607 / 1000  60.70% Early Stop  
+158     935 / 1000  93.50% Early Stop  
+159     818 / 1000  81.80% Early Stop  
+160     882 / 1000  88.20% Early Stop  
+161     825 / 1000  82.50% Early Stop  
+162     981 / 1000  98.10% Early Stop  
+163     979 / 1000  97.90% Early Stop  
+164    1000 / 1000 100.00% Complete    
+165     917 / 1000  91.70% Early Stop  
+166     992 / 1000  99.20% Early Stop  
+167    1000 / 1000 100.00% Early Stop  
+168     997 / 1000  99.70% Early Stop  
+169    1000 / 1000 100.00% Early Stop  
+170     995 / 1000  99.50% Early Stop  
+171     998 / 1000  99.80% Early Stop  
+172     950 / 1000  95.00% Early Stop  
+173     827 / 1000  82.70% Early Stop  
+174     713 / 1000  71.30% Early Stop  
+175     927 / 1000  92.70% Early Stop  
+176     984 / 1000  98.40% Early Stop  
+177    1000 / 1000 100.00% Complete    
+178     999 / 1000  99.90% Early Stop  
+179    1000 / 1000 100.00% Complete    
+180    1000 / 1000 100.00% Complete    
+181     405 / 1000  40.50% Early Stop  
+182     628 / 1000  62.80% Early Stop  
+183     983 / 1000  98.30% Early Stop  
+184     988 / 1000  98.80% Early Stop  
+185     996 / 1000  99.60% Early Stop  
+186     965 / 1000  96.50% Early Stop  
+187    1000 / 1000 100.00% Complete    
+188     935 / 1000  93.50% Early Stop  
+189     979 / 1000  97.90% Early Stop  
+190     745 / 1000  74.50% Early Stop  
+191     886 / 1000  88.60% Early Stop  
+192     816 / 1000  81.60% Early Stop  
+193    1000 / 1000 100.00% Early Stop  
+194     973 / 1000  97.30% Early Stop  
+195     989 / 1000  98.90% Early Stop  
+196     605 / 1000  60.50% Early Stop  
+197     964 / 1000  96.40% Early Stop  
+198     831 / 1000  83.10% Early Stop  
+199     969 / 1000  96.90% Early Stop  
+200     554 / 1000  55.40% Early Stop  
+201     960 / 1000  96.00% Early Stop  
+202     549 / 1000  54.90% Early Stop  
+203     563 / 1000  56.30% Early Stop  
+204     982 / 1000  98.20% Early Stop  
+205    1000 / 1000 100.00% Early Stop  
+206     996 / 1000  99.60% Early Stop  
+207     998 / 1000  99.80% Early Stop  
+208     524 / 1000  52.40% Early Stop  
+209     918 / 1000  91.80% Early Stop  
+210    1000 / 1000 100.00% Complete    
+211     998 / 1000  99.80% Early Stop  
+212     990 / 1000  99.00% Early Stop  
+213     998 / 1000  99.80% Early Stop  
+214     997 / 1000  99.70% Early Stop  
+215     991 / 1000  99.10% Early Stop  
+216     986 / 1000  98.60% Early Stop  
+217     925 / 1000  92.50% Early Stop  
+218     972 / 1000  97.20% Early Stop  
+219     896 / 1000  89.60% Early Stop  
+220     990 / 1000  99.00% Early Stop  
+221    1000 / 1000 100.00% Complete    
+222     898 / 1000  89.80% Early Stop  
+223     976 / 1000  97.60% Early Stop  
+224     764 / 1000  76.40% Early Stop  
+225     984 / 1000  98.40% Early Stop  
+226     986 / 1000  98.60% Early Stop  
+227    1000 / 1000 100.00% Early Stop  
+228     336 / 1000  33.60% Early Stop  
+229     997 / 1000  99.70% Early Stop  
+230     981 / 1000  98.10% Early Stop  
+231    1000 / 1000 100.00% Early Stop  
+232     997 / 1000  99.70% Early Stop  
+233     370 / 1000  37.00% Early Stop  
+234     998 / 1000  99.80% Early Stop  
+235     998 / 1000  99.80% Early Stop  
+236    1000 / 1000 100.00% Complete    
+237     984 / 1000  98.40% Early Stop  
+238     866 / 1000  86.60% Early Stop  
+239    1000 / 1000 100.00% Early Stop  
+240     995 / 1000  99.50% Early Stop  
+241    1000 / 1000 100.00% Complete    
+242     697 / 1000  69.70% Early Stop  
+243     970 / 1000  97.00% Early Stop  
+244     803 / 1000  80.30% Early Stop  
+245     155 / 1000  15.50% Early Stop  
+246     996 / 1000  99.60% Early Stop  
+247     986 / 1000  98.60% Early Stop  
+248    1000 / 1000 100.00% Early Stop  
+249     961 / 1000  96.10% Early Stop  
+250     983 / 1000  98.30% Early Stop  
+251     942 / 1000  94.20% Early Stop  
+252     992 / 1000  99.20% Early Stop  
+253     655 / 1000  65.50% Early Stop  
+254    1000 / 1000 100.00% Complete    
+255     804 / 1000  80.40% Early Stop  
+256     970 / 1000  97.00% Early Stop  
+257    1000 / 1000 100.00% Early Stop  
+258     985 / 1000  98.50% Early Stop  
+259     991 / 1000  99.10% Early Stop  
+260     982 / 1000  98.20% Early Stop  
+261     973 / 1000  97.30% Early Stop  
+262     880 / 1000  88.00% Early Stop  
+263     997 / 1000  99.70% Early Stop  
+264     994 / 1000  99.40% Early Stop  
+265     659 / 1000  65.90% Early Stop  
+266    1000 / 1000 100.00% Early Stop  
+267     995 / 1000  99.50% Early Stop  
+268     988 / 1000  98.80% Early Stop  
+269     907 / 1000  90.70% Early Stop  
+270     998 / 1000  99.80% Early Stop  
+271     841 / 1000  84.10% Early Stop  
+272     962 / 1000  96.20% Early Stop  
+273     998 / 1000  99.80% Early Stop  
+274     987 / 1000  98.70% Early Stop  
+275     284 / 1000  28.40% Early Stop  
+276     852 / 1000  85.20% Early Stop  
+277     996 / 1000  99.60% Early Stop  
+278     585 / 1000  58.50% Early Stop  
+279     991 / 1000  99.10% Early Stop  
+280     990 / 1000  99.00% Early Stop  
+281     998 / 1000  99.80% Early Stop  
+282     988 / 1000  98.80% Early Stop  
+283     697 / 1000  69.70% Early Stop  
+284     931 / 1000  93.10% Early Stop  
+285     998 / 1000  99.80% Early Stop  
+286     992 / 1000  99.20% Early Stop  
+287     976 / 1000  97.60% Early Stop  
+288    1000 / 1000 100.00% Early Stop  
+289     996 / 1000  99.60% Early Stop  
+290     994 / 1000  99.40% Early Stop  
+291     908 / 1000  90.80% Early Stop  
+292    1000 / 1000 100.00% Early Stop  
+293     888 / 1000  88.80% Early Stop  
+294     792 / 1000  79.20% Early Stop  
+295     933 / 1000  93.30% Early Stop  
+296     950 / 1000  95.00% Early Stop  
+297     999 / 1000  99.90% Early Stop  
+298     916 / 1000  91.60% Early Stop  
+299     979 / 1000  97.90% Early Stop  
+300     669 / 1000  66.90% Early Stop  
+301     748 / 1000  74.80% Early Stop  
+302     973 / 1000  97.30% Early Stop  
+303     836 / 1000  83.60% Early Stop  
+304     929 / 1000  92.90% Early Stop  
+305     580 / 1000  58.00% Early Stop  
+306    1000 / 1000 100.00% Early Stop  
+307     940 / 1000  94.00% Early Stop  
+308     996 / 1000  99.60% Early Stop  
+309    1000 / 1000 100.00% Complete    
+310     870 / 1000  87.00% Early Stop  
+311     997 / 1000  99.70% Early Stop  
+312     997 / 1000  99.70% Early Stop  
+313     998 / 1000  99.80% Early Stop  
+314     509 / 1000  50.90% Early Stop  
+315     959 / 1000  95.90% Early Stop  
+316    1000 / 1000 100.00% Early Stop  
+317     704 / 1000  70.40% Early Stop  
+318     295 / 1000  29.50% Early Stop  
+319     984 / 1000  98.40% Early Stop  
+320    1000 / 1000 100.00% Early Stop  
+321     942 / 1000  94.20% Early Stop  
+322     968 / 1000  96.80% Early Stop  
+323     996 / 1000  99.60% Early Stop  
+324     964 / 1000  96.40% Early Stop  
+325     936 / 1000  93.60% Early Stop  
+326     993 / 1000  99.30% Early Stop  
+327     921 / 1000  92.10% Early Stop  
+328    1000 / 1000 100.00% Complete    
+329     943 / 1000  94.30% Early Stop  
+330     994 / 1000  99.40% Early Stop  
+331     920 / 1000  92.00% Early Stop  
+332     962 / 1000  96.20% Early Stop  
+333    1000 / 1000 100.00% Complete    
+334     994 / 1000  99.40% Early Stop  
+335     985 / 1000  98.50% Early Stop  
+336     992 / 1000  99.20% Early Stop  
+337     931 / 1000  93.10% Early Stop  
+338    1000 / 1000 100.00% Complete    
+339     988 / 1000  98.80% Early Stop  
+340     974 / 1000  97.40% Early Stop  
+341     999 / 1000  99.90% Early Stop  
+342     698 / 1000  69.80% Early Stop  
+343     321 / 1000  32.10% Early Stop  
+344     914 / 1000  91.40% Early Stop  
+345     979 / 1000  97.90% Early Stop  
+346     923 / 1000  92.30% Early Stop  
+347     971 / 1000  97.10% Early Stop  
+348     624 / 1000  62.40% Early Stop  
+349     814 / 1000  81.40% Early Stop  
+350     753 / 1000  75.30% Early Stop  
+351     998 / 1000  99.80% Early Stop  
+352     990 / 1000  99.00% Early Stop  
+353     984 / 1000  98.40% Early Stop  
+354    1000 / 1000 100.00% Early Stop  
+355     901 / 1000  90.10% Early Stop  
+356     933 / 1000  93.30% Early Stop  
+357     999 / 1000  99.90% Early Stop  
+358    1000 / 1000 100.00% Complete    
+359     753 / 1000  75.30% Early Stop  
+360     896 / 1000  89.60% Early Stop  
+361     986 / 1000  98.60% Early Stop  
+362     994 / 1000  99.40% Early Stop  
+363     977 / 1000  97.70% Early Stop  
+364     934 / 1000  93.40% Early Stop  
+365     537 / 1000  53.70% Early Stop  
+366     801 / 1000  80.10% Early Stop  
+367    1000 / 1000 100.00% Complete    
+368    1000 / 1000 100.00% Early Stop  
+369     987 / 1000  98.70% Early Stop  
+370     930 / 1000  93.00% Early Stop  
+371     845 / 1000  84.50% Early Stop  
+372     954 / 1000  95.40% Early Stop  
+373     791 / 1000  79.10% Early Stop  
+374     624 / 1000  62.40% Early Stop  
+375     977 / 1000  97.70% Early Stop  
+376     983 / 1000  98.30% Early Stop  
+377     972 / 1000  97.20% Early Stop  
+378    1000 / 1000 100.00% Complete    
+379     987 / 1000  98.70% Early Stop  
+380     796 / 1000  79.60% Early Stop  
+381     997 / 1000  99.70% Early Stop  
+382    1000 / 1000 100.00% Complete    
+383     964 / 1000  96.40% Early Stop  
+384     987 / 1000  98.70% Early Stop  
+385     129 / 1000  12.90% Early Stop  
+386     955 / 1000  95.50% Early Stop  
+387     957 / 1000  95.70% Early Stop  
+388     634 / 1000  63.40% Early Stop  
+389     938 / 1000  93.80% Early Stop  
+390     988 / 1000  98.80% Early Stop  
+391     715 / 1000  71.50% Early Stop  
+392     994 / 1000  99.40% Early Stop  
+393    1000 / 1000 100.00% Complete    
+394     806 / 1000  80.60% Early Stop  
+395    1000 / 1000 100.00% Early Stop  
+396     978 / 1000  97.80% Early Stop  
+397     996 / 1000  99.60% Early Stop  
+398     974 / 1000  97.40% Early Stop  
+399     968 / 1000  96.80% Early Stop  
+400     946 / 1000  94.60% Early Stop  
+401     990 / 1000  99.00% Early Stop  
+402     378 / 1000  37.80% Early Stop  
+403     956 / 1000  95.60% Early Stop  
+404     648 / 1000  64.80% Early Stop  
+405     989 / 1000  98.90% Early Stop  
+406     982 / 1000  98.20% Early Stop  
+407     983 / 1000  98.30% Early Stop  
+408     976 / 1000  97.60% Early Stop  
+409     994 / 1000  99.40% Early Stop  
+410     603 / 1000  60.30% Early Stop  
+411     979 / 1000  97.90% Early Stop  
+412     335 / 1000  33.50% Early Stop  
+413     998 / 1000  99.80% Early Stop  
+414     981 / 1000  98.10% Early Stop  
+415     995 / 1000  99.50% Early Stop  
+416     904 / 1000  90.40% Early Stop  
+417    1000 / 1000 100.00% Early Stop  
+418    1000 / 1000 100.00% Complete    
+419     981 / 1000  98.10% Early Stop  
+420     997 / 1000  99.70% Early Stop  
+421     997 / 1000  99.70% Early Stop  
+422     999 / 1000  99.90% Early Stop  
+423     981 / 1000  98.10% Early Stop  
+424     993 / 1000  99.30% Early Stop  
+425     996 / 1000  99.60% Early Stop  
+426    1000 / 1000 100.00% Complete    
+427     949 / 1000  94.90% Early Stop  
+428     964 / 1000  96.40% Early Stop  
+429     970 / 1000  97.00% Early Stop  
+430     940 / 1000  94.00% Early Stop  
+431     559 / 1000  55.90% Early Stop  
+432     425 / 1000  42.50% Early Stop  
+433     948 / 1000  94.80% Early Stop  
+434     991 / 1000  99.10% Early Stop  
+435    1000 / 1000 100.00% Early Stop  
+436     871 / 1000  87.10% Early Stop  
+437     916 / 1000  91.60% Early Stop  
+438     999 / 1000  99.90% Early Stop  
+439     989 / 1000  98.90% Early Stop  
+440     997 / 1000  99.70% Early Stop  
+441    1000 / 1000 100.00% Early Stop  
+442    1000 / 1000 100.00% Early Stop  
+443     970 / 1000  97.00% Early Stop  
+444     671 / 1000  67.10% Early Stop  
+445     997 / 1000  99.70% Early Stop  
+446     934 / 1000  93.40% Early Stop  
+447     999 / 1000  99.90% Early Stop  
+448    1000 / 1000 100.00% Complete    
+449     932 / 1000  93.20% Early Stop  
+450     979 / 1000  97.90% Early Stop  
+451     961 / 1000  96.10% Early Stop  
+452     988 / 1000  98.80% Early Stop  
+453     811 / 1000  81.10% Early Stop  
+454     948 / 1000  94.80% Early Stop  
+455     793 / 1000  79.30% Early Stop  
+456     956 / 1000  95.60% Early Stop  
+457     973 / 1000  97.30% Early Stop  
+458     973 / 1000  97.30% Early Stop  
+459     545 / 1000  54.50% Early Stop  
+460     920 / 1000  92.00% Early Stop  
+461    1000 / 1000 100.00% Early Stop  
+462     592 / 1000  59.20% Early Stop  
+463     429 / 1000  42.90% Early Stop  
+464     991 / 1000  99.10% Early Stop  
+465     994 / 1000  99.40% Early Stop  
+466     692 / 1000  69.20% Early Stop  
+467     882 / 1000  88.20% Early Stop  
+468     916 / 1000  91.60% Early Stop  
+469     990 / 1000  99.00% Early Stop  
+470     928 / 1000  92.80% Early Stop  
+471    1000 / 1000 100.00% Complete    
+472     986 / 1000  98.60% Early Stop  
+473     985 / 1000  98.50% Early Stop  
+474     956 / 1000  95.60% Early Stop  
+475     563 / 1000  56.30% Early Stop  
+476    1000 / 1000 100.00% Complete    
+477     999 / 1000  99.90% Early Stop  
+478     988 / 1000  98.80% Early Stop  
+479    1000 / 1000 100.00% Complete    
+480     928 / 1000  92.80% Early Stop  
+481     273 / 1000  27.30% Early Stop  
+482     996 / 1000  99.60% Early Stop  
+483     957 / 1000  95.70% Early Stop  
+484     954 / 1000  95.40% Early Stop  
+485    1000 / 1000 100.00% Early Stop  
+486    1000 / 1000 100.00% Complete    
+487     498 / 1000  49.80% Early Stop  
+488     782 / 1000  78.20% Early Stop  
+489     539 / 1000  53.90% Early Stop  
+490     997 / 1000  99.70% Early Stop  
+491     998 / 1000  99.80% Early Stop  
+492     813 / 1000  81.30% Early Stop  
+493     352 / 1000  35.20% Early Stop  
+494     997 / 1000  99.70% Early Stop  
+495    1000 / 1000 100.00% Complete    
+496     836 / 1000  83.60% Early Stop  
+497     994 / 1000  99.40% Early Stop  
+498     760 / 1000  76.00% Early Stop  
+499     567 / 1000  56.70% Early Stop  
+500     809 / 1000  80.90% Early Stop  
+
+============================================================
+Statistics:
+  Total iterations: 500
+  - Early stopped: 464 (92.8%)
+  - Completed: 36 (7.2%)
+  Overall average: 898.7 / 1000.0 (89.87%)
+  Early stop avg: 890.8 / 1000.0 (89.08%)
+
+------------------------------------------------------------
+Early Stopping Distribution:
+     0-10%:    0 (  0.0%) 
+    10-20%:    2 (  0.4%) 
+    20-30%:    4 (  0.8%) 
+    30-40%:    8 (  1.6%) 
+    40-50%:    7 (  1.4%) 
+    50-60%:   20 (  4.0%) ██
+    60-70%:   21 (  4.2%) ██
+    70-80%:   26 (  5.2%) ██
+    80-90%:   41 (  8.2%) ████
+   90-100%:  371 ( 74.2%) █████████████████████████████████████

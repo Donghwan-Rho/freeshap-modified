@@ -14,6 +14,16 @@ vinfo/freeshap_res/*
 !vinfo/freeshap_res/ntk/
 !vinfo/freeshap_res/ntk/**
 
+# Keep the bulky-folder analysis files (ipynb/txt/png/pdf) — only *.pkl is ignored
+!vinfo/freeshap_res/data_removing/
+!vinfo/freeshap_res/data_removing/**
+!vinfo/freeshap_res/data_selection/
+!vinfo/freeshap_res/data_selection/**
+!vinfo/freeshap_res/previous_data_selection/
+!vinfo/freeshap_res/previous_data_selection/**
+!vinfo/freeshap_res/wrong_label_detection/
+!vinfo/freeshap_res/wrong_label_detection/**
+
 # Keep claude_research/ (analysis + docs + reports + code)
 !vinfo/freeshap_res/claude_research/
 !vinfo/freeshap_res/claude_research/**

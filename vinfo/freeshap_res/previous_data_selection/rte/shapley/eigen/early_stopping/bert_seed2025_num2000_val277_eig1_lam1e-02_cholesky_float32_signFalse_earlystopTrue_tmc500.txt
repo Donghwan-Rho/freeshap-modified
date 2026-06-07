@@ -1,0 +1,529 @@
+TMC Iteration Log
+============================================================
+Dataset: rte, Train: 2000, Val: 277
+Mode: eigen, TMC iterations: 500, Seed: 2025
+Early stopping enabled: True
+
+Iter      k / n        Pct Status      
+------ ----   ---- ------- ------------
+1      1866 / 2000  93.30% Early Stop  
+2      1961 / 2000  98.05% Early Stop  
+3      1948 / 2000  97.40% Early Stop  
+4      1994 / 2000  99.70% Early Stop  
+5      1952 / 2000  97.60% Early Stop  
+6      1788 / 2000  89.40% Early Stop  
+7      1983 / 2000  99.15% Early Stop  
+8      1996 / 2000  99.80% Early Stop  
+9      1497 / 2000  74.85% Early Stop  
+10     1858 / 2000  92.90% Early Stop  
+11     1999 / 2000  99.95% Early Stop  
+12     2000 / 2000 100.00% Complete    
+13      480 / 2000  24.00% Early Stop  
+14     1785 / 2000  89.25% Early Stop  
+15     1993 / 2000  99.65% Early Stop  
+16     1849 / 2000  92.45% Early Stop  
+17     2000 / 2000 100.00% Complete    
+18     1796 / 2000  89.80% Early Stop  
+19     1977 / 2000  98.85% Early Stop  
+20     1917 / 2000  95.85% Early Stop  
+21     1653 / 2000  82.65% Early Stop  
+22     1991 / 2000  99.55% Early Stop  
+23     1999 / 2000  99.95% Early Stop  
+24     1700 / 2000  85.00% Early Stop  
+25     2000 / 2000 100.00% Complete    
+26     1911 / 2000  95.55% Early Stop  
+27     1334 / 2000  66.70% Early Stop  
+28     1815 / 2000  90.75% Early Stop  
+29     1482 / 2000  74.10% Early Stop  
+30     1896 / 2000  94.80% Early Stop  
+31     2000 / 2000 100.00% Complete    
+32     1674 / 2000  83.70% Early Stop  
+33     1471 / 2000  73.55% Early Stop  
+34     1083 / 2000  54.15% Early Stop  
+35     1994 / 2000  99.70% Early Stop  
+36     1080 / 2000  54.00% Early Stop  
+37     1281 / 2000  64.05% Early Stop  
+38     1948 / 2000  97.40% Early Stop  
+39     1965 / 2000  98.25% Early Stop  
+40     1841 / 2000  92.05% Early Stop  
+41     1997 / 2000  99.85% Early Stop  
+42     1892 / 2000  94.60% Early Stop  
+43     1932 / 2000  96.60% Early Stop  
+44     1993 / 2000  99.65% Early Stop  
+45     2000 / 2000 100.00% Early Stop  
+46     2000 / 2000 100.00% Early Stop  
+47     1847 / 2000  92.35% Early Stop  
+48      741 / 2000  37.05% Early Stop  
+49     1897 / 2000  94.85% Early Stop  
+50     2000 / 2000 100.00% Complete    
+51     1997 / 2000  99.85% Early Stop  
+52     1981 / 2000  99.05% Early Stop  
+53     1995 / 2000  99.75% Early Stop  
+54     1872 / 2000  93.60% Early Stop  
+55     2000 / 2000 100.00% Early Stop  
+56     1996 / 2000  99.80% Early Stop  
+57     1915 / 2000  95.75% Early Stop  
+58     1997 / 2000  99.85% Early Stop  
+59     2000 / 2000 100.00% Early Stop  
+60     2000 / 2000 100.00% Early Stop  
+61     1714 / 2000  85.70% Early Stop  
+62     1498 / 2000  74.90% Early Stop  
+63     1929 / 2000  96.45% Early Stop  
+64     2000 / 2000 100.00% Complete    
+65     1953 / 2000  97.65% Early Stop  
+66     2000 / 2000 100.00% Early Stop  
+67     1026 / 2000  51.30% Early Stop  
+68     2000 / 2000 100.00% Complete    
+69     1345 / 2000  67.25% Early Stop  
+70     1975 / 2000  98.75% Early Stop  
+71     1916 / 2000  95.80% Early Stop  
+72     1730 / 2000  86.50% Early Stop  
+73      787 / 2000  39.35% Early Stop  
+74     2000 / 2000 100.00% Complete    
+75     1875 / 2000  93.75% Early Stop  
+76     1953 / 2000  97.65% Early Stop  
+77     1658 / 2000  82.90% Early Stop  
+78     2000 / 2000 100.00% Complete    
+79     1994 / 2000  99.70% Early Stop  
+80     1790 / 2000  89.50% Early Stop  
+81     1955 / 2000  97.75% Early Stop  
+82     1842 / 2000  92.10% Early Stop  
+83     1997 / 2000  99.85% Early Stop  
+84      735 / 2000  36.75% Early Stop  
+85     1275 / 2000  63.75% Early Stop  
+86     1235 / 2000  61.75% Early Stop  
+87     1981 / 2000  99.05% Early Stop  
+88     1353 / 2000  67.65% Early Stop  
+89     1996 / 2000  99.80% Early Stop  
+90     1995 / 2000  99.75% Early Stop  
+91     1444 / 2000  72.20% Early Stop  
+92     1872 / 2000  93.60% Early Stop  
+93     1076 / 2000  53.80% Early Stop  
+94     1991 / 2000  99.55% Early Stop  
+95     1038 / 2000  51.90% Early Stop  
+96     1979 / 2000  98.95% Early Stop  
+97     1732 / 2000  86.60% Early Stop  
+98     2000 / 2000 100.00% Complete    
+99     1753 / 2000  87.65% Early Stop  
+100    1941 / 2000  97.05% Early Stop  
+101    1942 / 2000  97.10% Early Stop  
+102    1990 / 2000  99.50% Early Stop  
+103    1999 / 2000  99.95% Early Stop  
+104    1900 / 2000  95.00% Early Stop  
+105    1996 / 2000  99.80% Early Stop  
+106    2000 / 2000 100.00% Early Stop  
+107    1825 / 2000  91.25% Early Stop  
+108    1999 / 2000  99.95% Early Stop  
+109    1848 / 2000  92.40% Early Stop  
+110    1759 / 2000  87.95% Early Stop  
+111    1951 / 2000  97.55% Early Stop  
+112     394 / 2000  19.70% Early Stop  
+113    1361 / 2000  68.05% Early Stop  
+114    1924 / 2000  96.20% Early Stop  
+115    1858 / 2000  92.90% Early Stop  
+116    2000 / 2000 100.00% Complete    
+117    1605 / 2000  80.25% Early Stop  
+118    1536 / 2000  76.80% Early Stop  
+119    2000 / 2000 100.00% Complete    
+120    1300 / 2000  65.00% Early Stop  
+121    1990 / 2000  99.50% Early Stop  
+122    1379 / 2000  68.95% Early Stop  
+123    2000 / 2000 100.00% Complete    
+124    1941 / 2000  97.05% Early Stop  
+125    1864 / 2000  93.20% Early Stop  
+126    1978 / 2000  98.90% Early Stop  
+127    2000 / 2000 100.00% Complete    
+128     860 / 2000  43.00% Early Stop  
+129    1909 / 2000  95.45% Early Stop  
+130    1370 / 2000  68.50% Early Stop  
+131    1997 / 2000  99.85% Early Stop  
+132    1094 / 2000  54.70% Early Stop  
+133    1958 / 2000  97.90% Early Stop  
+134    1991 / 2000  99.55% Early Stop  
+135    2000 / 2000 100.00% Complete    
+136    1987 / 2000  99.35% Early Stop  
+137    1223 / 2000  61.15% Early Stop  
+138    1984 / 2000  99.20% Early Stop  
+139    1998 / 2000  99.90% Early Stop  
+140     613 / 2000  30.65% Early Stop  
+141     987 / 2000  49.35% Early Stop  
+142    1999 / 2000  99.95% Early Stop  
+143    2000 / 2000 100.00% Complete    
+144    1916 / 2000  95.80% Early Stop  
+145    1636 / 2000  81.80% Early Stop  
+146    2000 / 2000 100.00% Complete    
+147    1916 / 2000  95.80% Early Stop  
+148    1826 / 2000  91.30% Early Stop  
+149    1929 / 2000  96.45% Early Stop  
+150    1935 / 2000  96.75% Early Stop  
+151    2000 / 2000 100.00% Complete    
+152    1980 / 2000  99.00% Early Stop  
+153    1921 / 2000  96.05% Early Stop  
+154    1967 / 2000  98.35% Early Stop  
+155    1997 / 2000  99.85% Early Stop  
+156    1442 / 2000  72.10% Early Stop  
+157    1798 / 2000  89.90% Early Stop  
+158    1987 / 2000  99.35% Early Stop  
+159    1978 / 2000  98.90% Early Stop  
+160    1953 / 2000  97.65% Early Stop  
+161    2000 / 2000 100.00% Complete    
+162    2000 / 2000 100.00% Complete    
+163    1897 / 2000  94.85% Early Stop  
+164    1968 / 2000  98.40% Early Stop  
+165    2000 / 2000 100.00% Complete    
+166    2000 / 2000 100.00% Complete    
+167    1952 / 2000  97.60% Early Stop  
+168    1997 / 2000  99.85% Early Stop  
+169    1997 / 2000  99.85% Early Stop  
+170    1655 / 2000  82.75% Early Stop  
+171     785 / 2000  39.25% Early Stop  
+172    1512 / 2000  75.60% Early Stop  
+173    1857 / 2000  92.85% Early Stop  
+174    1857 / 2000  92.85% Early Stop  
+175    1947 / 2000  97.35% Early Stop  
+176    1997 / 2000  99.85% Early Stop  
+177    1424 / 2000  71.20% Early Stop  
+178    1974 / 2000  98.70% Early Stop  
+179    1980 / 2000  99.00% Early Stop  
+180    1981 / 2000  99.05% Early Stop  
+181    1984 / 2000  99.20% Early Stop  
+182    2000 / 2000 100.00% Complete    
+183    2000 / 2000 100.00% Early Stop  
+184    1176 / 2000  58.80% Early Stop  
+185    1978 / 2000  98.90% Early Stop  
+186    1953 / 2000  97.65% Early Stop  
+187    2000 / 2000 100.00% Complete    
+188    1972 / 2000  98.60% Early Stop  
+189    1863 / 2000  93.15% Early Stop  
+190     699 / 2000  34.95% Early Stop  
+191    1969 / 2000  98.45% Early Stop  
+192    1057 / 2000  52.85% Early Stop  
+193    2000 / 2000 100.00% Complete    
+194    1893 / 2000  94.65% Early Stop  
+195    1690 / 2000  84.50% Early Stop  
+196    1564 / 2000  78.20% Early Stop  
+197     235 / 2000  11.75% Early Stop  
+198     226 / 2000  11.30% Early Stop  
+199    1987 / 2000  99.35% Early Stop  
+200    1950 / 2000  97.50% Early Stop  
+201    1955 / 2000  97.75% Early Stop  
+202    2000 / 2000 100.00% Early Stop  
+203    1966 / 2000  98.30% Early Stop  
+204    1700 / 2000  85.00% Early Stop  
+205    2000 / 2000 100.00% Complete    
+206    1954 / 2000  97.70% Early Stop  
+207    2000 / 2000 100.00% Complete    
+208     817 / 2000  40.85% Early Stop  
+209    1860 / 2000  93.00% Early Stop  
+210    1995 / 2000  99.75% Early Stop  
+211    1651 / 2000  82.55% Early Stop  
+212    1823 / 2000  91.15% Early Stop  
+213    2000 / 2000 100.00% Complete    
+214    1925 / 2000  96.25% Early Stop  
+215     196 / 2000   9.80% Early Stop  
+216    2000 / 2000 100.00% Early Stop  
+217    1516 / 2000  75.80% Early Stop  
+218    1951 / 2000  97.55% Early Stop  
+219    1997 / 2000  99.85% Early Stop  
+220    2000 / 2000 100.00% Early Stop  
+221    1990 / 2000  99.50% Early Stop  
+222    2000 / 2000 100.00% Early Stop  
+223    2000 / 2000 100.00% Complete    
+224    1981 / 2000  99.05% Early Stop  
+225    1998 / 2000  99.90% Early Stop  
+226    1784 / 2000  89.20% Early Stop  
+227    1803 / 2000  90.15% Early Stop  
+228    1973 / 2000  98.65% Early Stop  
+229    1997 / 2000  99.85% Early Stop  
+230    1807 / 2000  90.35% Early Stop  
+231    1626 / 2000  81.30% Early Stop  
+232    1793 / 2000  89.65% Early Stop  
+233    2000 / 2000 100.00% Complete    
+234    1991 / 2000  99.55% Early Stop  
+235    1898 / 2000  94.90% Early Stop  
+236    2000 / 2000 100.00% Early Stop  
+237    2000 / 2000 100.00% Early Stop  
+238    1410 / 2000  70.50% Early Stop  
+239    2000 / 2000 100.00% Early Stop  
+240    1509 / 2000  75.45% Early Stop  
+241    1176 / 2000  58.80% Early Stop  
+242    1982 / 2000  99.10% Early Stop  
+243    1994 / 2000  99.70% Early Stop  
+244    2000 / 2000 100.00% Complete    
+245    1878 / 2000  93.90% Early Stop  
+246    1995 / 2000  99.75% Early Stop  
+247    1303 / 2000  65.15% Early Stop  
+248    1955 / 2000  97.75% Early Stop  
+249     965 / 2000  48.25% Early Stop  
+250    1530 / 2000  76.50% Early Stop  
+251    1980 / 2000  99.00% Early Stop  
+252    2000 / 2000 100.00% Complete    
+253     319 / 2000  15.95% Early Stop  
+254    1928 / 2000  96.40% Early Stop  
+255    2000 / 2000 100.00% Complete    
+256    1961 / 2000  98.05% Early Stop  
+257    1977 / 2000  98.85% Early Stop  
+258    1975 / 2000  98.75% Early Stop  
+259    1998 / 2000  99.90% Early Stop  
+260    1923 / 2000  96.15% Early Stop  
+261    1556 / 2000  77.80% Early Stop  
+262    1971 / 2000  98.55% Early Stop  
+263    1886 / 2000  94.30% Early Stop  
+264    1996 / 2000  99.80% Early Stop  
+265    2000 / 2000 100.00% Complete    
+266    2000 / 2000 100.00% Early Stop  
+267    1452 / 2000  72.60% Early Stop  
+268    1979 / 2000  98.95% Early Stop  
+269    1976 / 2000  98.80% Early Stop  
+270    1852 / 2000  92.60% Early Stop  
+271    1939 / 2000  96.95% Early Stop  
+272    1999 / 2000  99.95% Early Stop  
+273    2000 / 2000 100.00% Early Stop  
+274    1999 / 2000  99.95% Early Stop  
+275    1993 / 2000  99.65% Early Stop  
+276    2000 / 2000 100.00% Complete    
+277    1798 / 2000  89.90% Early Stop  
+278    1998 / 2000  99.90% Early Stop  
+279    1769 / 2000  88.45% Early Stop  
+280    1968 / 2000  98.40% Early Stop  
+281    1872 / 2000  93.60% Early Stop  
+282    2000 / 2000 100.00% Complete    
+283    1833 / 2000  91.65% Early Stop  
+284    1995 / 2000  99.75% Early Stop  
+285    2000 / 2000 100.00% Early Stop  
+286    1762 / 2000  88.10% Early Stop  
+287    1995 / 2000  99.75% Early Stop  
+288    1520 / 2000  76.00% Early Stop  
+289    1823 / 2000  91.15% Early Stop  
+290    1947 / 2000  97.35% Early Stop  
+291    1926 / 2000  96.30% Early Stop  
+292    2000 / 2000 100.00% Complete    
+293    1925 / 2000  96.25% Early Stop  
+294    1466 / 2000  73.30% Early Stop  
+295    1998 / 2000  99.90% Early Stop  
+296    2000 / 2000 100.00% Complete    
+297    2000 / 2000 100.00% Complete    
+298    2000 / 2000 100.00% Complete    
+299    1972 / 2000  98.60% Early Stop  
+300     764 / 2000  38.20% Early Stop  
+301    1984 / 2000  99.20% Early Stop  
+302    1949 / 2000  97.45% Early Stop  
+303     722 / 2000  36.10% Early Stop  
+304    1774 / 2000  88.70% Early Stop  
+305    2000 / 2000 100.00% Complete    
+306    1857 / 2000  92.85% Early Stop  
+307    1997 / 2000  99.85% Early Stop  
+308    1628 / 2000  81.40% Early Stop  
+309    1995 / 2000  99.75% Early Stop  
+310    2000 / 2000 100.00% Complete    
+311    2000 / 2000 100.00% Early Stop  
+312    1991 / 2000  99.55% Early Stop  
+313    1660 / 2000  83.00% Early Stop  
+314    2000 / 2000 100.00% Complete    
+315    1862 / 2000  93.10% Early Stop  
+316    1191 / 2000  59.55% Early Stop  
+317    1150 / 2000  57.50% Early Stop  
+318    1991 / 2000  99.55% Early Stop  
+319    1943 / 2000  97.15% Early Stop  
+320    1800 / 2000  90.00% Early Stop  
+321    1779 / 2000  88.95% Early Stop  
+322    2000 / 2000 100.00% Early Stop  
+323    1972 / 2000  98.60% Early Stop  
+324    1347 / 2000  67.35% Early Stop  
+325    1842 / 2000  92.10% Early Stop  
+326    2000 / 2000 100.00% Complete    
+327     983 / 2000  49.15% Early Stop  
+328    1898 / 2000  94.90% Early Stop  
+329    1966 / 2000  98.30% Early Stop  
+330    1968 / 2000  98.40% Early Stop  
+331    1997 / 2000  99.85% Early Stop  
+332     667 / 2000  33.35% Early Stop  
+333    1971 / 2000  98.55% Early Stop  
+334    2000 / 2000 100.00% Complete    
+335    1982 / 2000  99.10% Early Stop  
+336    1976 / 2000  98.80% Early Stop  
+337    1705 / 2000  85.25% Early Stop  
+338    1904 / 2000  95.20% Early Stop  
+339    1994 / 2000  99.70% Early Stop  
+340    2000 / 2000 100.00% Complete    
+341    1632 / 2000  81.60% Early Stop  
+342    1900 / 2000  95.00% Early Stop  
+343    1583 / 2000  79.15% Early Stop  
+344    2000 / 2000 100.00% Early Stop  
+345    1838 / 2000  91.90% Early Stop  
+346    1983 / 2000  99.15% Early Stop  
+347    1985 / 2000  99.25% Early Stop  
+348    1952 / 2000  97.60% Early Stop  
+349    1846 / 2000  92.30% Early Stop  
+350    1982 / 2000  99.10% Early Stop  
+351    1996 / 2000  99.80% Early Stop  
+352    1984 / 2000  99.20% Early Stop  
+353    1947 / 2000  97.35% Early Stop  
+354    1984 / 2000  99.20% Early Stop  
+355    1989 / 2000  99.45% Early Stop  
+356    1922 / 2000  96.10% Early Stop  
+357    2000 / 2000 100.00% Complete    
+358    1598 / 2000  79.90% Early Stop  
+359    1867 / 2000  93.35% Early Stop  
+360    2000 / 2000 100.00% Complete    
+361    1214 / 2000  60.70% Early Stop  
+362    1151 / 2000  57.55% Early Stop  
+363    1615 / 2000  80.75% Early Stop  
+364    1997 / 2000  99.85% Early Stop  
+365    1498 / 2000  74.90% Early Stop  
+366    1060 / 2000  53.00% Early Stop  
+367    1996 / 2000  99.80% Early Stop  
+368    2000 / 2000 100.00% Early Stop  
+369    1929 / 2000  96.45% Early Stop  
+370     832 / 2000  41.60% Early Stop  
+371    1984 / 2000  99.20% Early Stop  
+372    1968 / 2000  98.40% Early Stop  
+373    1999 / 2000  99.95% Early Stop  
+374     982 / 2000  49.10% Early Stop  
+375     741 / 2000  37.05% Early Stop  
+376    1746 / 2000  87.30% Early Stop  
+377    1995 / 2000  99.75% Early Stop  
+378    2000 / 2000 100.00% Complete    
+379    1923 / 2000  96.15% Early Stop  
+380    1951 / 2000  97.55% Early Stop  
+381    1718 / 2000  85.90% Early Stop  
+382    2000 / 2000 100.00% Complete    
+383    1788 / 2000  89.40% Early Stop  
+384     778 / 2000  38.90% Early Stop  
+385    1937 / 2000  96.85% Early Stop  
+386    1982 / 2000  99.10% Early Stop  
+387    2000 / 2000 100.00% Complete    
+388    1953 / 2000  97.65% Early Stop  
+389    1992 / 2000  99.60% Early Stop  
+390    1569 / 2000  78.45% Early Stop  
+391     617 / 2000  30.85% Early Stop  
+392    1967 / 2000  98.35% Early Stop  
+393    1382 / 2000  69.10% Early Stop  
+394    1915 / 2000  95.75% Early Stop  
+395    1988 / 2000  99.40% Early Stop  
+396    2000 / 2000 100.00% Complete    
+397    1946 / 2000  97.30% Early Stop  
+398    1722 / 2000  86.10% Early Stop  
+399    2000 / 2000 100.00% Complete    
+400    1951 / 2000  97.55% Early Stop  
+401    1978 / 2000  98.90% Early Stop  
+402    1855 / 2000  92.75% Early Stop  
+403    1976 / 2000  98.80% Early Stop  
+404    1891 / 2000  94.55% Early Stop  
+405    1984 / 2000  99.20% Early Stop  
+406    1864 / 2000  93.20% Early Stop  
+407     604 / 2000  30.20% Early Stop  
+408    1930 / 2000  96.50% Early Stop  
+409    1924 / 2000  96.20% Early Stop  
+410    2000 / 2000 100.00% Complete    
+411    1998 / 2000  99.90% Early Stop  
+412    1927 / 2000  96.35% Early Stop  
+413    1776 / 2000  88.80% Early Stop  
+414    1986 / 2000  99.30% Early Stop  
+415    2000 / 2000 100.00% Complete    
+416    1938 / 2000  96.90% Early Stop  
+417    2000 / 2000 100.00% Complete    
+418    1644 / 2000  82.20% Early Stop  
+419    1725 / 2000  86.25% Early Stop  
+420    1999 / 2000  99.95% Early Stop  
+421    2000 / 2000 100.00% Complete    
+422    1969 / 2000  98.45% Early Stop  
+423    1978 / 2000  98.90% Early Stop  
+424    1715 / 2000  85.75% Early Stop  
+425    1795 / 2000  89.75% Early Stop  
+426    1971 / 2000  98.55% Early Stop  
+427    2000 / 2000 100.00% Complete    
+428    1990 / 2000  99.50% Early Stop  
+429    2000 / 2000 100.00% Complete    
+430    1927 / 2000  96.35% Early Stop  
+431    2000 / 2000 100.00% Complete    
+432    2000 / 2000 100.00% Complete    
+433    2000 / 2000 100.00% Early Stop  
+434    1857 / 2000  92.85% Early Stop  
+435    1983 / 2000  99.15% Early Stop  
+436    2000 / 2000 100.00% Complete    
+437    2000 / 2000 100.00% Complete    
+438    1995 / 2000  99.75% Early Stop  
+439    1575 / 2000  78.75% Early Stop  
+440    1999 / 2000  99.95% Early Stop  
+441    2000 / 2000 100.00% Complete    
+442     255 / 2000  12.75% Early Stop  
+443    1929 / 2000  96.45% Early Stop  
+444    1998 / 2000  99.90% Early Stop  
+445    1943 / 2000  97.15% Early Stop  
+446    1997 / 2000  99.85% Early Stop  
+447    1943 / 2000  97.15% Early Stop  
+448    1220 / 2000  61.00% Early Stop  
+449    1989 / 2000  99.45% Early Stop  
+450    1330 / 2000  66.50% Early Stop  
+451    1968 / 2000  98.40% Early Stop  
+452    1406 / 2000  70.30% Early Stop  
+453    1996 / 2000  99.80% Early Stop  
+454    1971 / 2000  98.55% Early Stop  
+455    1938 / 2000  96.90% Early Stop  
+456    1960 / 2000  98.00% Early Stop  
+457    1989 / 2000  99.45% Early Stop  
+458    1989 / 2000  99.45% Early Stop  
+459    1952 / 2000  97.60% Early Stop  
+460    2000 / 2000 100.00% Complete    
+461     969 / 2000  48.45% Early Stop  
+462    1977 / 2000  98.85% Early Stop  
+463    1996 / 2000  99.80% Early Stop  
+464    1910 / 2000  95.50% Early Stop  
+465    1857 / 2000  92.85% Early Stop  
+466    1428 / 2000  71.40% Early Stop  
+467    1976 / 2000  98.80% Early Stop  
+468    1977 / 2000  98.85% Early Stop  
+469     683 / 2000  34.15% Early Stop  
+470    1972 / 2000  98.60% Early Stop  
+471    1998 / 2000  99.90% Early Stop  
+472    1935 / 2000  96.75% Early Stop  
+473    1953 / 2000  97.65% Early Stop  
+474    2000 / 2000 100.00% Early Stop  
+475    1983 / 2000  99.15% Early Stop  
+476    1932 / 2000  96.60% Early Stop  
+477    1060 / 2000  53.00% Early Stop  
+478    1998 / 2000  99.90% Early Stop  
+479    1961 / 2000  98.05% Early Stop  
+480    1987 / 2000  99.35% Early Stop  
+481    1830 / 2000  91.50% Early Stop  
+482    1969 / 2000  98.45% Early Stop  
+483    2000 / 2000 100.00% Complete    
+484    2000 / 2000 100.00% Complete    
+485    1869 / 2000  93.45% Early Stop  
+486    1993 / 2000  99.65% Early Stop  
+487    1343 / 2000  67.15% Early Stop  
+488    1889 / 2000  94.45% Early Stop  
+489    1401 / 2000  70.05% Early Stop  
+490    1963 / 2000  98.15% Early Stop  
+491    1979 / 2000  98.95% Early Stop  
+492    1983 / 2000  99.15% Early Stop  
+493    1957 / 2000  97.85% Early Stop  
+494    1964 / 2000  98.20% Early Stop  
+495    2000 / 2000 100.00% Complete    
+496     437 / 2000  21.85% Early Stop  
+497    1999 / 2000  99.95% Early Stop  
+498    1913 / 2000  95.65% Early Stop  
+499     391 / 2000  19.55% Early Stop  
+500    1980 / 2000  99.00% Early Stop  
+
+============================================================
+Statistics:
+  Total iterations: 500
+  - Early stopped: 432 (86.4%)
+  - Completed: 68 (13.6%)
+  Overall average: 1788.8 / 2000.0 (89.44%)
+  Early stop avg: 1755.6 / 2000.0 (87.78%)
+
+------------------------------------------------------------
+Early Stopping Distribution:
+     0-10%:    1 (  0.2%) 
+    10-20%:    6 (  1.2%) 
+    20-30%:    2 (  0.4%) 
+    30-40%:   14 (  2.8%) █
+    40-50%:    8 (  1.6%) 
+    50-60%:   14 (  2.8%) █
+    60-70%:   18 (  3.6%) █
+    70-80%:   26 (  5.2%) ██
+    80-90%:   42 (  8.4%) ████
+   90-100%:  369 ( 73.8%) ████████████████████████████████████

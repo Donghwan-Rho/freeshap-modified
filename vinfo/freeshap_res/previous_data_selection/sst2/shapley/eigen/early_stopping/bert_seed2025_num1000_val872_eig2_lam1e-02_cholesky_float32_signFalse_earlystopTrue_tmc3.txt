@@ -1,0 +1,8 @@
+TMC Iteration Log
+============================================================
+Dataset: sst2, Train: 1000, Val: 872
+Mode: eigen, TMC iterations: 3, Seed: 2025
+Early stopping enabled: True
+
+Iter      k / n        Pct Status      
+------ ----   ---- ------- ------------

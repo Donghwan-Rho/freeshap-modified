@@ -1,0 +1,129 @@
+TMC Iteration Log
+============================================================
+Dataset: rte, Train: 2490, Val: 277
+Mode: eigen, TMC iterations: 100, Seed: 2025
+Early stopping enabled: True
+
+Iter      k / n        Pct Status      
+------ ----   ---- ------- ------------
+1      1630 / 2490  65.46% Early Stop  
+2       475 / 2490  19.08% Early Stop  
+3      2404 / 2490  96.55% Early Stop  
+4       388 / 2490  15.58% Early Stop  
+5       566 / 2490  22.73% Early Stop  
+6      2128 / 2490  85.46% Early Stop  
+7       889 / 2490  35.70% Early Stop  
+8       653 / 2490  26.22% Early Stop  
+9      1800 / 2490  72.29% Early Stop  
+10      454 / 2490  18.23% Early Stop  
+11      605 / 2490  24.30% Early Stop  
+12      633 / 2490  25.42% Early Stop  
+13     1574 / 2490  63.21% Early Stop  
+14      476 / 2490  19.12% Early Stop  
+15     1660 / 2490  66.67% Early Stop  
+16     2471 / 2490  99.24% Early Stop  
+17     1680 / 2490  67.47% Early Stop  
+18     2457 / 2490  98.67% Early Stop  
+19      711 / 2490  28.55% Early Stop  
+20     1099 / 2490  44.14% Early Stop  
+21      457 / 2490  18.35% Early Stop  
+22      804 / 2490  32.29% Early Stop  
+23     1896 / 2490  76.14% Early Stop  
+24      522 / 2490  20.96% Early Stop  
+25     1432 / 2490  57.51% Early Stop  
+26     2449 / 2490  98.35% Early Stop  
+27      382 / 2490  15.34% Early Stop  
+28      754 / 2490  30.28% Early Stop  
+29      536 / 2490  21.53% Early Stop  
+30      723 / 2490  29.04% Early Stop  
+31      856 / 2490  34.38% Early Stop  
+32      438 / 2490  17.59% Early Stop  
+33     1217 / 2490  48.88% Early Stop  
+34     2040 / 2490  81.93% Early Stop  
+35     2455 / 2490  98.59% Early Stop  
+36     1155 / 2490  46.39% Early Stop  
+37      384 / 2490  15.42% Early Stop  
+38      574 / 2490  23.05% Early Stop  
+39     1712 / 2490  68.76% Early Stop  
+40     2142 / 2490  86.02% Early Stop  
+41     1515 / 2490  60.84% Early Stop  
+42     1908 / 2490  76.63% Early Stop  
+43     2194 / 2490  88.11% Early Stop  
+44      572 / 2490  22.97% Early Stop  
+45     2112 / 2490  84.82% Early Stop  
+46      775 / 2490  31.12% Early Stop  
+47     2346 / 2490  94.22% Early Stop  
+48     1698 / 2490  68.19% Early Stop  
+49     1985 / 2490  79.72% Early Stop  
+50     1290 / 2490  51.81% Early Stop  
+51     1348 / 2490  54.14% Early Stop  
+52     2440 / 2490  97.99% Early Stop  
+53     2471 / 2490  99.24% Early Stop  
+54     2338 / 2490  93.90% Early Stop  
+55      472 / 2490  18.96% Early Stop  
+56     2187 / 2490  87.83% Early Stop  
+57     1259 / 2490  50.56% Early Stop  
+58      492 / 2490  19.76% Early Stop  
+59      814 / 2490  32.69% Early Stop  
+60     2274 / 2490  91.33% Early Stop  
+61     1399 / 2490  56.18% Early Stop  
+62      329 / 2490  13.21% Early Stop  
+63     1656 / 2490  66.51% Early Stop  
+64      704 / 2490  28.27% Early Stop  
+65     2431 / 2490  97.63% Early Stop  
+66     1720 / 2490  69.08% Early Stop  
+67     1303 / 2490  52.33% Early Stop  
+68     2248 / 2490  90.28% Early Stop  
+69     1069 / 2490  42.93% Early Stop  
+70      390 / 2490  15.66% Early Stop  
+71     2100 / 2490  84.34% Early Stop  
+72      799 / 2490  32.09% Early Stop  
+73     1114 / 2490  44.74% Early Stop  
+74     1612 / 2490  64.74% Early Stop  
+75      360 / 2490  14.46% Early Stop  
+76      564 / 2490  22.65% Early Stop  
+77     2001 / 2490  80.36% Early Stop  
+78     1846 / 2490  74.14% Early Stop  
+79     1414 / 2490  56.79% Early Stop  
+80      756 / 2490  30.36% Early Stop  
+81     2465 / 2490  99.00% Early Stop  
+82     1945 / 2490  78.11% Early Stop  
+83     1416 / 2490  56.87% Early Stop  
+84     2086 / 2490  83.78% Early Stop  
+85     2450 / 2490  98.39% Early Stop  
+86     1566 / 2490  62.89% Early Stop  
+87      611 / 2490  24.54% Early Stop  
+88     1845 / 2490  74.10% Early Stop  
+89     1858 / 2490  74.62% Early Stop  
+90     2346 / 2490  94.22% Early Stop  
+91     1604 / 2490  64.42% Early Stop  
+92      213 / 2490   8.55% Early Stop  
+93     1097 / 2490  44.06% Early Stop  
+94      303 / 2490  12.17% Early Stop  
+95      844 / 2490  33.90% Early Stop  
+96     2374 / 2490  95.34% Early Stop  
+97     1551 / 2490  62.29% Early Stop  
+98     1638 / 2490  65.78% Early Stop  
+99     1138 / 2490  45.70% Early Stop  
+100    2324 / 2490  93.33% Early Stop  
+
+============================================================
+Statistics:
+  Total iterations: 100
+  - Early stopped: 100 (100.0%)
+  - Completed: 0 (0.0%)
+  Overall average: 1376.6 / 2490.0 (55.29%)
+  Early stop avg: 1376.6 / 2490.0 (55.29%)
+
+------------------------------------------------------------
+Early Stopping Distribution:
+     0-10%:    1 (  1.0%) 
+    10-20%:   14 ( 14.0%) ███████
+    20-30%:   13 ( 13.0%) ██████
+    30-40%:    9 (  9.0%) ████
+    40-50%:    7 (  7.0%) ███
+    50-60%:    8 (  8.0%) ████
+    60-70%:   14 ( 14.0%) ███████
+    70-80%:    8 (  8.0%) ████
+    80-90%:    9 (  9.0%) ████
+   90-100%:   17 ( 17.0%) ████████

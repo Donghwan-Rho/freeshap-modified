@@ -1,0 +1,129 @@
+TMC Iteration Log
+============================================================
+Dataset: qqp, Train: 1000, Val: 1000
+Mode: eigen, TMC iterations: 100, Seed: 2025
+Early stopping enabled: True
+
+Iter      k / n        Pct Status      
+------ ----   ---- ------- ------------
+1       169 / 1000  16.90% Early Stop  
+2       273 / 1000  27.30% Early Stop  
+3       280 / 1000  28.00% Early Stop  
+4       228 / 1000  22.80% Early Stop  
+5       170 / 1000  17.00% Early Stop  
+6       259 / 1000  25.90% Early Stop  
+7       255 / 1000  25.50% Early Stop  
+8       437 / 1000  43.70% Early Stop  
+9       246 / 1000  24.60% Early Stop  
+10      743 / 1000  74.30% Early Stop  
+11      443 / 1000  44.30% Early Stop  
+12      722 / 1000  72.20% Early Stop  
+13      454 / 1000  45.40% Early Stop  
+14      455 / 1000  45.50% Early Stop  
+15      277 / 1000  27.70% Early Stop  
+16      704 / 1000  70.40% Early Stop  
+17      333 / 1000  33.30% Early Stop  
+18      261 / 1000  26.10% Early Stop  
+19      468 / 1000  46.80% Early Stop  
+20      185 / 1000  18.50% Early Stop  
+21      374 / 1000  37.40% Early Stop  
+22      374 / 1000  37.40% Early Stop  
+23      324 / 1000  32.40% Early Stop  
+24      480 / 1000  48.00% Early Stop  
+25      601 / 1000  60.10% Early Stop  
+26      525 / 1000  52.50% Early Stop  
+27      246 / 1000  24.60% Early Stop  
+28      580 / 1000  58.00% Early Stop  
+29      288 / 1000  28.80% Early Stop  
+30      421 / 1000  42.10% Early Stop  
+31      359 / 1000  35.90% Early Stop  
+32      204 / 1000  20.40% Early Stop  
+33      536 / 1000  53.60% Early Stop  
+34      490 / 1000  49.00% Early Stop  
+35      487 / 1000  48.70% Early Stop  
+36      166 / 1000  16.60% Early Stop  
+37      372 / 1000  37.20% Early Stop  
+38      402 / 1000  40.20% Early Stop  
+39      522 / 1000  52.20% Early Stop  
+40      197 / 1000  19.70% Early Stop  
+41      247 / 1000  24.70% Early Stop  
+42      548 / 1000  54.80% Early Stop  
+43      571 / 1000  57.10% Early Stop  
+44      456 / 1000  45.60% Early Stop  
+45      283 / 1000  28.30% Early Stop  
+46      161 / 1000  16.10% Early Stop  
+47      524 / 1000  52.40% Early Stop  
+48      387 / 1000  38.70% Early Stop  
+49      486 / 1000  48.60% Early Stop  
+50      213 / 1000  21.30% Early Stop  
+51      316 / 1000  31.60% Early Stop  
+52      210 / 1000  21.00% Early Stop  
+53      493 / 1000  49.30% Early Stop  
+54      336 / 1000  33.60% Early Stop  
+55      389 / 1000  38.90% Early Stop  
+56      323 / 1000  32.30% Early Stop  
+57      151 / 1000  15.10% Early Stop  
+58      378 / 1000  37.80% Early Stop  
+59      359 / 1000  35.90% Early Stop  
+60      261 / 1000  26.10% Early Stop  
+61      314 / 1000  31.40% Early Stop  
+62      215 / 1000  21.50% Early Stop  
+63      461 / 1000  46.10% Early Stop  
+64      300 / 1000  30.00% Early Stop  
+65      431 / 1000  43.10% Early Stop  
+66      309 / 1000  30.90% Early Stop  
+67      412 / 1000  41.20% Early Stop  
+68      370 / 1000  37.00% Early Stop  
+69      235 / 1000  23.50% Early Stop  
+70      684 / 1000  68.40% Early Stop  
+71      437 / 1000  43.70% Early Stop  
+72      436 / 1000  43.60% Early Stop  
+73      217 / 1000  21.70% Early Stop  
+74      562 / 1000  56.20% Early Stop  
+75      286 / 1000  28.60% Early Stop  
+76      284 / 1000  28.40% Early Stop  
+77      299 / 1000  29.90% Early Stop  
+78      608 / 1000  60.80% Early Stop  
+79      410 / 1000  41.00% Early Stop  
+80      401 / 1000  40.10% Early Stop  
+81      293 / 1000  29.30% Early Stop  
+82      260 / 1000  26.00% Early Stop  
+83      197 / 1000  19.70% Early Stop  
+84      677 / 1000  67.70% Early Stop  
+85      504 / 1000  50.40% Early Stop  
+86      276 / 1000  27.60% Early Stop  
+87      238 / 1000  23.80% Early Stop  
+88      174 / 1000  17.40% Early Stop  
+89      518 / 1000  51.80% Early Stop  
+90      267 / 1000  26.70% Early Stop  
+91      251 / 1000  25.10% Early Stop  
+92      278 / 1000  27.80% Early Stop  
+93      294 / 1000  29.40% Early Stop  
+94      737 / 1000  73.70% Early Stop  
+95      382 / 1000  38.20% Early Stop  
+96      242 / 1000  24.20% Early Stop  
+97      386 / 1000  38.60% Early Stop  
+98      581 / 1000  58.10% Early Stop  
+99      300 / 1000  30.00% Early Stop  
+100     566 / 1000  56.60% Early Stop  
+
+============================================================
+Statistics:
+  Total iterations: 100
+  - Early stopped: 100 (100.0%)
+  - Completed: 0 (0.0%)
+  Overall average: 374.9 / 1000.0 (37.49%)
+  Early stop avg: 374.9 / 1000.0 (37.49%)
+
+------------------------------------------------------------
+Early Stopping Distribution:
+     0-10%:    0 (  0.0%) 
+    10-20%:    9 (  9.0%) ████
+    20-30%:   31 ( 31.0%) ███████████████
+    30-40%:   20 ( 20.0%) ██████████
+    40-50%:   20 ( 20.0%) ██████████
+    50-60%:   12 ( 12.0%) ██████
+    60-70%:    4 (  4.0%) ██
+    70-80%:    4 (  4.0%) ██
+    80-90%:    0 (  0.0%) 
+   90-100%:    0 (  0.0%) 

@@ -1,0 +1,129 @@
+TMC Iteration Log
+============================================================
+Dataset: mr, Train: 8530, Val: 1000
+Mode: eigen, TMC iterations: 100, Seed: 2025
+Early stopping enabled: True
+
+Iter      k / n        Pct Status      
+------ ----   ---- ------- ------------
+1      1455 / 8530  17.06% Early Stop  
+2      1093 / 8530  12.81% Early Stop  
+3      1394 / 8530  16.34% Early Stop  
+4      1197 / 8530  14.03% Early Stop  
+5      1127 / 8530  13.21% Early Stop  
+6      1394 / 8530  16.34% Early Stop  
+7      1467 / 8530  17.20% Early Stop  
+8       832 / 8530   9.75% Early Stop  
+9       671 / 8530   7.87% Early Stop  
+10     1258 / 8530  14.75% Early Stop  
+11     1534 / 8530  17.98% Early Stop  
+12     1185 / 8530  13.89% Early Stop  
+13     1239 / 8530  14.53% Early Stop  
+14     1035 / 8530  12.13% Early Stop  
+15      657 / 8530   7.70% Early Stop  
+16     1255 / 8530  14.71% Early Stop  
+17      929 / 8530  10.89% Early Stop  
+18      635 / 8530   7.44% Early Stop  
+19     1513 / 8530  17.74% Early Stop  
+20     2020 / 8530  23.68% Early Stop  
+21      461 / 8530   5.40% Early Stop  
+22      740 / 8530   8.68% Early Stop  
+23     2968 / 8530  34.79% Early Stop  
+24      932 / 8530  10.93% Early Stop  
+25      737 / 8530   8.64% Early Stop  
+26     1532 / 8530  17.96% Early Stop  
+27     1569 / 8530  18.39% Early Stop  
+28      492 / 8530   5.77% Early Stop  
+29     2049 / 8530  24.02% Early Stop  
+30      404 / 8530   4.74% Early Stop  
+31      987 / 8530  11.57% Early Stop  
+32     1259 / 8530  14.76% Early Stop  
+33     1298 / 8530  15.22% Early Stop  
+34      895 / 8530  10.49% Early Stop  
+35      838 / 8530   9.82% Early Stop  
+36     1023 / 8530  11.99% Early Stop  
+37      929 / 8530  10.89% Early Stop  
+38      971 / 8530  11.38% Early Stop  
+39     1511 / 8530  17.71% Early Stop  
+40      883 / 8530  10.35% Early Stop  
+41     1824 / 8530  21.38% Early Stop  
+42     1353 / 8530  15.86% Early Stop  
+43     1321 / 8530  15.49% Early Stop  
+44      941 / 8530  11.03% Early Stop  
+45      908 / 8530  10.64% Early Stop  
+46      777 / 8530   9.11% Early Stop  
+47      546 / 8530   6.40% Early Stop  
+48      833 / 8530   9.77% Early Stop  
+49     1264 / 8530  14.82% Early Stop  
+50     1196 / 8530  14.02% Early Stop  
+51      522 / 8530   6.12% Early Stop  
+52      750 / 8530   8.79% Early Stop  
+53      402 / 8530   4.71% Early Stop  
+54      858 / 8530  10.06% Early Stop  
+55      812 / 8530   9.52% Early Stop  
+56      921 / 8530  10.80% Early Stop  
+57      429 / 8530   5.03% Early Stop  
+58      967 / 8530  11.34% Early Stop  
+59      568 / 8530   6.66% Early Stop  
+60     1135 / 8530  13.31% Early Stop  
+61     1068 / 8530  12.52% Early Stop  
+62      783 / 8530   9.18% Early Stop  
+63     1816 / 8530  21.29% Early Stop  
+64      921 / 8530  10.80% Early Stop  
+65      808 / 8530   9.47% Early Stop  
+66     1356 / 8530  15.90% Early Stop  
+67     1024 / 8530  12.00% Early Stop  
+68     1245 / 8530  14.60% Early Stop  
+69     1619 / 8530  18.98% Early Stop  
+70     1058 / 8530  12.40% Early Stop  
+71     1167 / 8530  13.68% Early Stop  
+72     1573 / 8530  18.44% Early Stop  
+73      783 / 8530   9.18% Early Stop  
+74     1180 / 8530  13.83% Early Stop  
+75      743 / 8530   8.71% Early Stop  
+76      818 / 8530   9.59% Early Stop  
+77     1169 / 8530  13.70% Early Stop  
+78     2088 / 8530  24.48% Early Stop  
+79     1340 / 8530  15.71% Early Stop  
+80     1995 / 8530  23.39% Early Stop  
+81      786 / 8530   9.21% Early Stop  
+82      801 / 8530   9.39% Early Stop  
+83     1748 / 8530  20.49% Early Stop  
+84      468 / 8530   5.49% Early Stop  
+85      538 / 8530   6.31% Early Stop  
+86     1471 / 8530  17.25% Early Stop  
+87      955 / 8530  11.20% Early Stop  
+88      733 / 8530   8.59% Early Stop  
+89     1248 / 8530  14.63% Early Stop  
+90      811 / 8530   9.51% Early Stop  
+91      869 / 8530  10.19% Early Stop  
+92     1178 / 8530  13.81% Early Stop  
+93     1595 / 8530  18.70% Early Stop  
+94      763 / 8530   8.94% Early Stop  
+95      657 / 8530   7.70% Early Stop  
+96      396 / 8530   4.64% Early Stop  
+97     1078 / 8530  12.64% Early Stop  
+98     1485 / 8530  17.41% Early Stop  
+99      756 / 8530   8.86% Early Stop  
+100     610 / 8530   7.15% Early Stop  
+
+============================================================
+Statistics:
+  Total iterations: 100
+  - Early stopped: 100 (100.0%)
+  - Completed: 0 (0.0%)
+  Overall average: 1082.0 / 8530.0 (12.68%)
+  Early stop avg: 1082.0 / 8530.0 (12.68%)
+
+------------------------------------------------------------
+Early Stopping Distribution:
+     0-10%:   35 ( 35.0%) █████████████████
+    10-20%:   57 ( 57.0%) ████████████████████████████
+    20-30%:    7 (  7.0%) ███
+    30-40%:    1 (  1.0%) 
+    40-50%:    0 (  0.0%) 
+    50-60%:    0 (  0.0%) 
+    60-70%:    0 (  0.0%) 
+    70-80%:    0 (  0.0%) 
+    80-90%:    0 (  0.0%) 
+   90-100%:    0 (  0.0%) 

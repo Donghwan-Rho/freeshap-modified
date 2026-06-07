@@ -1,0 +1,34 @@
+TIMING SUMMARY
+================================================================================
+
+GPU Information:
+----------------------------------------
+used_gpu_count: 1
+gpu_index: cuda:0
+gpu_model: NVIDIA GeForce RTX 3090
+----------------------------------------
+
+Timing Measurements:
+----------------------------------------
+eigendecomposition: 0.2218s
+eigen_preparation_total: 0.2231s
+eigen_preparation_overhead: 0.0013s
+shapley_computation: 2.6887s
+================================================================================
+TIMING SUMMARY
+================================================================================
+
+GPU Information:
+----------------------------------------
+used_gpu_count: 1
+gpu_index: cuda:0
+gpu_model: NVIDIA GeForce RTX 3090
+----------------------------------------
+
+Timing Measurements:
+----------------------------------------
+eigendecomposition: 0.2218s
+eigen_preparation_total: 0.2231s
+eigen_preparation_overhead: 0.0013s
+shapley_computation: 2.6887s
+================================================================================

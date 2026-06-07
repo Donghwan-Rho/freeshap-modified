@@ -1,0 +1,17 @@
+TIMING SUMMARY
+================================================================================
+
+GPU Information:
+----------------------------------------
+used_gpu_count: 1
+gpu_index: cuda:0
+gpu_model: NVIDIA RTX A6000
+----------------------------------------
+
+Timing Measurements:
+----------------------------------------
+eigendecomposition: 0.9545s
+eigen_preparation_total: 1.0024s
+eigen_preparation_overhead: 0.0479s
+shapley_computation: 258.5065s
+================================================================================

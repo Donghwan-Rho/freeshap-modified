@@ -1,0 +1,17 @@
+TIMING SUMMARY
+================================================================================
+
+GPU Information:
+----------------------------------------
+used_gpu_count: 1
+gpu_index: cuda:0
+gpu_model: NVIDIA GeForce RTX 3090
+----------------------------------------
+
+Timing Measurements:
+----------------------------------------
+eigendecomposition: 1.4153s
+eigen_preparation_total: 1.4725s
+eigen_preparation_overhead: 0.0572s
+shapley_computation: 682.6948s
+================================================================================
