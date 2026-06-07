@@ -1,3 +1,38 @@
-# results / artifacts
-vinfo/freeshap_res/
+# ============================================================
+# freeshap_res/ — original FreeShap outputs + claude_research/
+# ============================================================
+# Default: ignore everything under freeshap_res/
+vinfo/freeshap_res/*
+
+# Keep small analysis folders
+!vinfo/freeshap_res/feature_concentration/
+!vinfo/freeshap_res/feature_concentration/**
+!vinfo/freeshap_res/label_concentration/
+!vinfo/freeshap_res/label_concentration/**
+
+# Keep ntk/ analysis (eigenvalue png/txt) — *.pkl ignored below
+!vinfo/freeshap_res/ntk/
+!vinfo/freeshap_res/ntk/**
+
+# Keep claude_research/ (analysis + docs + reports + code)
+!vinfo/freeshap_res/claude_research/
+!vinfo/freeshap_res/claude_research/**
+
+# Inside claude_research/, re-ignore bulky data + run-time artifacts
+vinfo/freeshap_res/claude_research/data_selection_test/
+vinfo/freeshap_res/claude_research/imbalance_ntk/
+vinfo/freeshap_res/claude_research/state/iteration_*/eig_cache/
+vinfo/freeshap_res/claude_research/state/iteration_*/labels_cache/
+vinfo/freeshap_res/claude_research/experiments/*.log
+vinfo/freeshap_res/claude_research/experiments/*.pid
+vinfo/freeshap_res/claude_research/experiments/__pycache__/
+vinfo/freeshap_res/claude_research/reports/*_img/
+
+# Large analysis intermediates (regenerable via build_grand_df.py)
+vinfo/freeshap_res/claude_research/state/iteration_*/grand_df.csv
+
+# Fonts (system-installed or downloaded separately)
+vinfo/freeshap_res/claude_research/scripts/fonts/*.ttf
+
+# pkl files always ignored (catches shapley/*.pkl, ntk/*.pkl, etc.)
 **/*.pkl
