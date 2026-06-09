@@ -31,10 +31,8 @@ def parse_args():
                         help="Lambda (regularization parameter) for INV mode")
     parser.add_argument("--eigen_lambda_", type=float, default=1e-2,
                         help="Lambda (regularization parameter) for Eigen mode")
-    parser.add_argument("--nystrom_d", type=int, default=512,
-                        help="Number of random landmarks for Nystrom approximation")
-    parser.add_argument("--landmark_seed", type=int, default=1234,
-                        help="RNG seed for landmark sampling (Nystrom)")
+    parser.add_argument("--nystrom_d", type=float, default=30,
+                        help="Nystrom landmark count as percentage of num_train_dp (e.g., 10 means 10%% of data), same convention as --eigen_rank")
     parser.add_argument("--nystrom_lambda_", type=float, default=1e-3,
                         help="Lambda (ridge regularization) for Nystrom mode (friend's default = 1e-3)")
     parser.add_argument("--num_train_selected_list", type=int, nargs='+', 
@@ -64,6 +62,12 @@ def main():
     # Calculate actual eigen rank from percentage
     eigen_rank = int(num_train_dp * eigen_rank_pct / 100)
     print(f"[info] eigen_rank={eigen_rank_pct}% of num_dp={num_train_dp} -> actual rank={eigen_rank}")
+
+    # Nystrom landmark count: interpret --nystrom_d as percentage of num_dp (same convention as eigen_rank)
+    nystrom_d_pct = args.nystrom_d
+    nystrom_d = int(num_train_dp * nystrom_d_pct / 100)
+    if approximate == "nystrom":
+        print(f"[info] nystrom_d={nystrom_d_pct}% of num_dp={num_train_dp} -> actual landmarks={nystrom_d}")
 
     prompt = True
     signgd = False
@@ -106,11 +110,11 @@ def main():
         )
     elif approximate == "nystrom":
         probe_model.set_nystrom_params(
-            d=int(args.nystrom_d),
+            d=nystrom_d,
             lam=float(args.nystrom_lambda_),
             solver=eigen_solver,
             dtype=eigen_dtype,
-            landmark_seed=int(args.landmark_seed),
+            landmark_seed=seed,
             jitter=1e-8,
         )
     elif approximate == "inv":
@@ -140,7 +144,7 @@ def main():
         nys_lam_str = f"{float(args.nystrom_lambda_):.0e}"
         inv_lam_str = f"{inv_lambda_:.0e}"
         extra_tag = (
-            f"_nys{int(args.nystrom_d)}_landseed{int(args.landmark_seed)}"
+            f"_nys{nystrom_d_pct}"
             f"_nyslam{nys_lam_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
         )
     else:
@@ -359,11 +363,11 @@ def main():
             )
         elif approximate == "nystrom":
             probe_model.set_nystrom_params(
-                d=int(args.nystrom_d),
+                d=nystrom_d,
                 lam=float(args.nystrom_lambda_),
                 solver=eigen_solver,
                 dtype=eigen_dtype,
-                landmark_seed=int(args.landmark_seed),
+                landmark_seed=seed,
                 jitter=1e-8,
             )
 
@@ -396,7 +400,7 @@ def main():
             f.write(f"eigen rank: {eigen_rank_pct}% (actual: {eigen_rank})\n")
             f.write(f"solver: {eigen_solver}, dtype: {eigen_dtype}\n")
         elif approximate == "nystrom":
-            f.write(f"nystrom d: {int(args.nystrom_d)}, landmark_seed: {int(args.landmark_seed)}\n")
+            f.write(f"nystrom d: {nystrom_d_pct}% (actual: {nystrom_d}), landmark_seed: {seed} (= experiment seed)\n")
             f.write(f"solver: {eigen_solver}, dtype: {eigen_dtype}\n")
 
         f.write(f"\n")
