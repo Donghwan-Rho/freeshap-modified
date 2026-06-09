@@ -1,0 +1,52 @@
+===============================================================
+[mnli-n5000-valbal] cls60_20_20 (class_ratios=0.6,0.2,0.2) — NTK
+===============================================================
+[info] ignoring unrecognized args: ['--tmc_iter', '500']
+Constructing <class 'dataset.EasyReader'>
+Constructing <class 'dataset.FastListDataset'>
+Label entailment to word yes (2748)
+Label neutral to word maybe (2672)
+Label contradiction to word no (2053)
+label_to_word:  {'entailment': 2748, 'neutral': 2672, 'contradiction': 2053}
+label_list:  [2748, 2672, 2053]
+Constructing <class 'probe.NTKProbe'>
+Traceback (most recent call last):
+  File "/home/donghwan/freeshap/vinfo/freeshap_res/claude_research/experiments/task_imbalance_ntk.py", line 310, in <module>
+    main()
+  File "/home/donghwan/freeshap/vinfo/freeshap_res/claude_research/experiments/task_imbalance_ntk.py", line 145, in main
+    yaml_args = yaml.load(open(yaml_path), Loader=yaml.Loader)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/yaml/__init__.py", line 81, in load
+    return loader.get_single_data()
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/yaml/constructor.py", line 51, in get_single_data
+    return self.construct_document(node)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/yaml/constructor.py", line 60, in construct_document
+    for dummy in generator:
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/yaml/constructor.py", line 413, in construct_yaml_map
+    value = self.construct_mapping(node)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/yaml/constructor.py", line 218, in construct_mapping
+    return super().construct_mapping(node, deep=deep)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/yaml/constructor.py", line 143, in construct_mapping
+    value = self.construct_object(value_node, deep=deep)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/yaml/constructor.py", line 100, in construct_object
+    data = constructor(self, node)
+  File "/home/donghwan/freeshap/vinfo/utils.py", line 55, in from_yaml
+    return cls(**arg_dict)
+  File "/home/donghwan/freeshap/vinfo/probe.py", line 225, in __init__
+    self.model = PromptSentenceClassifier(model_name=model, num_frozen_layers=self.freeze_layers,
+  File "/home/donghwan/freeshap/vinfo/entks/nlpmodels.py", line 75, in __init__
+    self.model = BertForMaskedLM.from_pretrained(model_name, config=self.config)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/transformers/modeling_utils.py", line 2629, in from_pretrained
+    model = cls(config, *model_args, **model_kwargs)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/transformers/models/bert/modeling_bert.py", line 1315, in __init__
+    self.cls = BertOnlyMLMHead(config)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/transformers/models/bert/modeling_bert.py", line 707, in __init__
+    self.predictions = BertLMPredictionHead(config)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/transformers/models/bert/modeling_bert.py", line 691, in __init__
+    self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/torch/nn/modules/linear.py", line 112, in __init__
+    self.reset_parameters()
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/torch/nn/modules/linear.py", line 118, in reset_parameters
+    init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+  File "/home/donghwan/miniconda3/envs/freeshap/lib/python3.10/site-packages/torch/nn/init.py", line 518, in kaiming_uniform_
+    return tensor.uniform_(-bound, bound, generator=generator)
+KeyboardInterrupt
