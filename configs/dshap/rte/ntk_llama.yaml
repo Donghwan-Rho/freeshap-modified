@@ -6,7 +6,7 @@ dataset: !FastListDataset &id_dataset
   args:
     device: cuda:0
     batchsize: 2
-    model_string: meta-llama/Llama-2-13b-hf
+    model_string: meta-llama/Llama-2-7b-hf
     seq_len: 256
   data_loader: *id_disk_reader
   prompt: True
@@ -20,13 +20,13 @@ probe_com: !NTKProbe &id_probe_com
     device: cuda:0
     seed: 2023
     dataset: rte
-    model: meta-llama/Llama-2-13b-hf
+    model: meta-llama/Llama-2-7b-hf
     datadir: ./datasets
     savedir: ./ntks
     logdir: null
     workers_per_device: 1
-    grad_chunksize: 10000000 # adjust this value if memory is insufficient
-    mm_col_chunksize: 20000
+    grad_chunksize: 1000000 # adjust this value if memory is insufficient
+    mm_col_chunksize: 40000
     loader_batch_size: 16  # adjust this value if memory is insufficient
     loader_num_workers: 1   # when memory is pinned, don't set this to non-zero values
     pin_memory: False # setting it to true will cause cpu to stuck at termination (might have a fix though)
