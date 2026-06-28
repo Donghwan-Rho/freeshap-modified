@@ -74,7 +74,34 @@ def make_acc(tag, title, methods):
     fig.tight_layout(rect=[0,0,1,0.975])
     out=f'{OUT}/acc_{tag}.png'; fig.savefig(out,dpi=130,bbox_inches='tight'); plt.close(fig); print('saved:',out)
 
+def make_acc_matched():
+    """세팅4(matched): 데이터셋마다 (행=λ, 열=rank), 각 칸은 eig-λ vs nys-λ 2곡선.
+    → 같은 λ에서 eigen vs nystrom 직접 비교. 파일: acc_s4_{ds}.png"""
+    for ds,num in DATASETS:
+        nr,nc=len(LAMS),len(RANKS)
+        fig,axes=plt.subplots(nr,nc,figsize=(5.2*nc,2.5*nr),squeeze=False)
+        for i,lam in enumerate(LAMS):
+            for j,rank in enumerate(RANKS):
+                ax=axes[i][j]; plotted=False
+                for kind,fn,color in [('eigen',eig_txt,'#1a1a1a'),('nys',nys_txt,'#d62728')]:
+                    p=fn(ds,num,rank,lam)
+                    if not p: continue
+                    y=parse_inv_top(p)
+                    if y is None: continue
+                    ax.plot(np.arange(1,len(y)+1),y,color=color,lw=2.0 if kind=='eigen' else 1.6,
+                            label=f'{kind} λ={lam_disp(lam)}'); plotted=True
+                ax.set_title(f'λ={lam_disp(lam)} — rank {rank}%',fontsize=9)
+                ax.set_xlabel('sel %',fontsize=7); ax.set_ylabel('val acc',fontsize=7)
+                ax.tick_params(labelsize=6.5); ax.grid(True,alpha=0.3)
+                if plotted: ax.legend(fontsize=7,loc='lower right')
+                else: ax.text(0.5,0.5,'(no data)',ha='center',va='center',transform=ax.transAxes,color='gray')
+        fig.suptitle(f'[matched] {ds} (num{num}) — eigen vs nystrom at same lambda   (row=lambda 1e-1..1e-6, col=rank)',fontsize=12)
+        fig.tight_layout(rect=[0,0,1,0.99])
+        out=f'{OUT}/acc_s4_{ds}.png'; fig.savefig(out,dpi=130,bbox_inches='tight'); plt.close(fig); print('saved:',out)
+
 if __name__=='__main__':
     for tag,title,methods in SETTINGS:
+        if tag=='s4': continue           # s4(matched)는 데이터셋별로 따로
         make_acc(tag,title,methods)
+    make_acc_matched()
     print('\nACC FIGURES IN:',OUT)
