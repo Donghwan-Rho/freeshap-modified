@@ -46,3 +46,5 @@ vinfo/freeshap_res/claude_research/scripts/fonts/*.ttf
 
 # pkl files always ignored (catches shapley/*.pkl, ntk/*.pkl, etc.)
 **/*.pkl
+__pycache__/
+*.pyc
