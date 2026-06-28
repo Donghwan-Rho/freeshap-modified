@@ -89,11 +89,11 @@ def fig_heatmap(methods, stats, outpath, suptitle):
         for ci,m in enumerate(labels):
             if (ds,r,m) in stats: me,mx,co,sr=stats[(ds,r,m)]; C[ri,ci]=co; M[ri,ci]=me
     fig,axs=plt.subplots(1,2,figsize=(max(8,1.1*len(labels)+5),11))
-    c1=LinearSegmentedColormap.from_list('rg',['#b2182b','#f7f7c0','#1a9850'])
-    im0=axs[0].imshow(np.nan_to_num(C,nan=-0.05),cmap=c1,vmin=0,vmax=1,aspect='auto')
+    c1=LinearSegmentedColormap.from_list('rg',['#b2182b','#f7f7c0','#1a9850']); c1.set_bad('white')
+    im0=axs[0].imshow(np.ma.masked_invalid(C),cmap=c1,vmin=0,vmax=1,aspect='auto')
     axs[0].set_title('correlation( approx_sv , inv_sv )\n(1=identical, ~0=unrelated)',fontsize=11)
-    c2=LinearSegmentedColormap.from_list('gr',['#1a9850','#f7f7c0','#b2182b'])
-    im1=axs[1].imshow(np.nan_to_num(M,nan=99),cmap=c2,vmin=0,vmax=0.5,aspect='auto')
+    c2=LinearSegmentedColormap.from_list('gr',['#1a9850','#f7f7c0','#b2182b']); c2.set_bad('white')
+    im1=axs[1].imshow(np.ma.masked_invalid(M),cmap=c2,vmin=0,vmax=0.5,aspect='auto')
     axs[1].set_title('mean | approx_sv − inv_sv |\n(color capped 0.5; number=true)',fontsize=11)
     for ax,Mat,im in [(axs[0],C,im0),(axs[1],M,im1)]:
         ax.set_xticks(range(len(labels))); ax.set_xticklabels([m.replace('λ=','\nλ=') for m in labels],fontsize=8)
@@ -113,10 +113,10 @@ def fig_ranking(methods, rankstats, outpath, suptitle):
         for ci,m in enumerate(labels):
             if (ds,r,m) in rankstats: sp,ov=rankstats[(ds,r,m)]; S[ri,ci]=sp; T[ri,ci]=ov
     fig,axR=plt.subplots(1,2,figsize=(max(8,1.1*len(labels)+5),11))
-    cg=LinearSegmentedColormap.from_list('rg',['#b2182b','#f7f7c0','#1a9850'])
-    imS=axR[0].imshow(np.nan_to_num(S,nan=-0.05),cmap=cg,vmin=0,vmax=1,aspect='auto')
+    cg=LinearSegmentedColormap.from_list('rg',['#b2182b','#f7f7c0','#1a9850']); cg.set_bad('white')
+    imS=axR[0].imshow(np.ma.masked_invalid(S),cmap=cg,vmin=0,vmax=1,aspect='auto')
     axR[0].set_title('Spearman rank corr ( approx , inv )\n(1=same order, ~0=unrelated)',fontsize=11)
-    imT=axR[1].imshow(np.nan_to_num(T,nan=-0.05),cmap=cg,vmin=0,vmax=1,aspect='auto')
+    imT=axR[1].imshow(np.ma.masked_invalid(T),cmap=cg,vmin=0,vmax=1,aspect='auto')
     axR[1].set_title('top-5% overlap with inv\n(1=identical, ~0.05=random)',fontsize=11)
     for ax,Mat,im in [(axR[0],S,imS),(axR[1],T,imT)]:
         ax.set_xticks(range(len(labels))); ax.set_xticklabels([m.replace('λ=','\nλ=') for m in labels],fontsize=8)
@@ -196,6 +196,35 @@ def fig_matched_scatter(outpath):
     fig.suptitle('Matched-λ: eigen λ=X vs nys λ=X  (on y=x = faithful to inv; pooled over ds×rank, clipped ±3)',fontsize=12)
     fig.tight_layout(rect=[0,0,1,0.97]); fig.savefig(outpath,dpi=130,bbox_inches='tight'); plt.close(fig); print('saved:',outpath)
 
+def fig_errordist_matched():
+    """세팅4(matched) 오차분포: 데이터셋마다 (행=λ, 열=rank), 각 칸에 eig-λ vs nys-λ 히스토그램.
+    파일: errordist_s4_{ds}.png"""
+    XLIM=1.0; bins=np.linspace(-XLIM,XLIM,61); nr,nc=len(LAMS),len(RANKS)
+    for ds,N,V in DS:
+        ip=inv_path(ds,N,V); isv,isi=(load_sv(ip) if ip else (None,None))
+        fig,ax=plt.subplots(nr,nc,figsize=(5.2*nc,2.5*nr),squeeze=False)
+        for i,lam in enumerate(LAMS):
+            for j,r in enumerate(RANKS):
+                a=ax[i][j]; plotted=False
+                if isv is not None:
+                    for kind,pth,color in [('eigen',eig_path(ds,N,V,r,lam),'#1a1a1a'),
+                                           ('nys',  nys_path(ds,N,V,r,lam),'#d62728')]:
+                        if not pth: continue
+                        asv,asi=load_sv(pth); x,b=aligned(asv,asi,isv,isi)
+                        if len(x)==0: continue
+                        d=x-b
+                        a.hist(np.clip(d,-XLIM,XLIM),bins=bins,histtype='step',color=color,
+                               lw=2.0 if kind=='eigen' else 1.5,density=True,label=f'{kind} λ={disp(lam)}')
+                        plotted=True
+                a.axvline(0,color='gray',ls=':',lw=0.8)
+                a.set_title(f'λ={disp(lam)} — rank {r}%',fontsize=9)
+                a.set_xlabel('error (approx-inv)',fontsize=7); a.tick_params(labelsize=6.5)
+                if plotted: a.legend(fontsize=7)
+                else: a.text(0.5,0.5,'(no data)',ha='center',va='center',transform=a.transAxes,color='gray')
+        fig.suptitle(f'[matched err-dist] {ds} (num{N}) — eigen vs nystrom at same lambda (row=lambda, col=rank; clip +-1)',fontsize=12)
+        fig.tight_layout(rect=[0,0,1,0.99])
+        out=f'{OUT}/errordist_s4_{ds}.png'; fig.savefig(out,dpi=130,bbox_inches='tight'); plt.close(fig); print('saved:',out)
+
 # 4 comparison settings (shared concept with the acc-curve script plot_eig_nys.py)
 SETTINGS = [
     ('s1', '1) eigen lam=1e-2 vs nystrom lam=1e-1..1e-6',
@@ -213,6 +242,8 @@ if __name__=='__main__':
         diffs,stats,rankstats=compute(methods)
         fig_heatmap (methods, stats,     f'{OUT}/heatmap_{tag}.png',  f'[{title}] value fidelity to inv')
         fig_absdiff (methods, stats,     f'{OUT}/absdiff_{tag}.png',  f'[{title}] |approx-inv|: bar=mean, tick=max (log y)')
-        fig_errordist(methods, diffs,    f'{OUT}/errordist_{tag}.png',f'[{title}] per-point error (approx-inv), clipped +-1')
+        if tag!='s4':   # s4 오차분포는 데이터셋별 matched로 따로 생성
+            fig_errordist(methods, diffs, f'{OUT}/errordist_{tag}.png',f'[{title}] per-point error (approx-inv), clipped +-1')
         fig_ranking (methods, rankstats, f'{OUT}/ranking_{tag}.png',  f'[{title}] ranking preservation (Spearman / top-5%)')
+    fig_errordist_matched()   # errordist_s4_{ds}.png (행=λ, 열=rank, eig vs nys)
     print('\nALL FIGURES IN:', OUT)

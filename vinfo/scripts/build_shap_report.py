@@ -59,18 +59,31 @@ SETTINGS=[
  ('s3','세팅 3) nystrom 내부 λ=1e-1~1e-6'),
  ('s4','세팅 4) matched: λ별 eigen vs nystrom (인접 열)'),
 ]
+DS_A=[('sst2',5000),('mnli',5000),('ag_news',5000),('mr',5000),('qqp',5000),('rte',2490),('mrpc',3668)]
 
-def part(part_label, prefix, intro, cap, maxw=172*mm, maxh=152*mm):
-    """한 분석 파트: 설명 1페이지 + 세팅 4개(각 1페이지)."""
+def part(part_label, prefix, intro, cap, maxw=172*mm, maxh=152*mm,
+         matched_perds=False, matched_maxw=172*mm, matched_maxh=210*mm):
+    """한 분석 파트: 설명 1페이지 + 세팅 4개(각 1페이지).
+    matched_perds=True면 s4(matched)를 데이터셋별 (행=λ,열=rank) 페이지로 전개."""
     P(part_label,'h')
     for t,s in intro: P(t,s)
     P('아래로 ' + g('세팅 4가지(s1~s4)') + '를 같은 분석으로 차례로 본다. '
       + g('결과 없는 칸/방법은 빈칸') + '.', 'small')
     story.append(PageBreak())
     for stag,slabel in SETTINGS:
-        P(f'{part_label}', 'h'); P(slabel,'sh')
-        FIG(f'{OUT}/{prefix}_{stag}.png', f'{slabel} — {cap}', maxw=maxw, maxh=maxh)
-        story.append(PageBreak())
+        if stag=='s4' and matched_perds:
+            P(f'{part_label}','h'); P('세팅 4) matched — 데이터셋별 (행=λ 1e-1~1e-6, 열=rank 1/5/20%)','sh')
+            P('각 칸 = 같은 λ에서 ' + g('eigen(검정) vs nystrom(빨강)') + ' 직접 비교.', 'small')
+            story.append(PageBreak())
+            for ds,num in DS_A:
+                P(f'{part_label} — matched — {ds}','sh')
+                FIG(f'{OUT}/{prefix}_s4_{ds}.png', f'{ds} (num{num}): eigen vs nystrom at same λ — 행=λ, 열=rank',
+                    maxw=matched_maxw, maxh=matched_maxh)
+                story.append(PageBreak())
+        else:
+            P(f'{part_label}', 'h'); P(slabel,'sh')
+            FIG(f'{OUT}/{prefix}_{stag}.png', f'{slabel} — {cap}', maxw=maxw, maxh=maxh)
+            story.append(PageBreak())
 
 # ===================== overview =====================
 P('Shapley Value 비교 리포트: inv vs eigen / nystrom','title')
@@ -97,9 +110,8 @@ story.append(PageBreak())
 part('A. 데이터 선택 정확도 (랭킹 기반)','acc',
  [(('각 방법의 Shapley 랭킹으로 상위 k%를 고른 뒤 ' + g('full eNTK(inv)') + '로 정확도 측정. '
     'x=선택 비율, y=검증 정확도. 곡선이 위일수록 더 좋은 데이터를 골랐다는 뜻.'),'body'),
-  (('대부분 칸에서 곡선이 겹친다 = ' + g('랭킹 기반 선택 정확도는 방법 간 차이가 작다') +
-    '. 값이 폭발한 칸에서도 이 곡선은 멀쩡 → ' + green('값은 못 믿어도 순위는 대체로 살아남는다') + '.'),'body')],
- '곡선 위일수록 좋은 랭킹 (full eNTK 평가)', maxw=152*mm, maxh=188*mm)
+  (('대부분 칸에서 곡선이 겹친다 = 랭킹 기반 선택 정확도는 방법 간 차이가 작다.'),'body')],
+ '곡선 위일수록 좋은 랭킹', maxw=152*mm, maxh=188*mm, matched_perds=True)
 
 # ===================== Part ① =====================
 part('① 충실도 히트맵 (correlation & mean|Δ|)','heatmap',
@@ -119,7 +131,7 @@ part('③ 점별 오차 분포','errordist',
  [(('점별 오차 = (approx 값 − inv 값)의 히스토그램. x=오차(0이면 inv와 일치). ' +
     g('|오차|>1은 ±1로 클리핑') + '해 양끝에 쌓음(좌상단에 클리핑 비율).'),'body'),
   ((green('0 중심으로 좁고 뾰족할수록 inv에 충실') + '. 폭발 시 0 근처가 비고 양끝(±1)에 스파이크.'),'body')],
- '(approx − inv) 점별 오차분포 — ±1 클리핑', maxw=152*mm, maxh=188*mm)
+ '(approx − inv) 점별 오차분포 — ±1 클리핑', maxw=152*mm, maxh=188*mm, matched_perds=True)
 
 # ===================== Part ④ =====================
 part('④ 순위(ranking) 보존도 — Spearman & top-5% 겹침','ranking',
