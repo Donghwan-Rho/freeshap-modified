@@ -1,0 +1,35 @@
+# CIFAR-10 vision NTK config — ffshap 방식 (ImageNet-pretrained ResNet-18, 스칼라 fc)
+# 삭제 시: rm -rf configs/dshap/cifar10/  (+ vinfo/vision/)
+
+disk_reader: !VisionReader &id_reader
+  args:
+    dataset_name: cifar10
+    datadir: ./datasets_vision
+    image_size: 224                       # ResNet-18 pretrained 입력
+
+dataset: !VisionDataset &id_dataset
+  args:
+    device: cuda:0
+    batchsize: 64
+  data_loader: *id_reader
+  prompt: False                           # vision은 prompt 없음
+  num_labels: 10
+
+probe_com: !NTKVisionProbe &id_probe
+  args:
+    device: cuda:0
+    seed: 2024
+    model: resnet-18_pretrained           # ImageNet-pretrained + fc→Linear(512,1)
+    unfreeze_layers: "fc+layer4"          # fc + layer4 unfreeze (rank full, ~8.4M params)
+                                          # 옵션: "fc" | "fc+layer4" | "fc+layer3+layer4" | "all"
+    single_kernel: True                   # 스칼라 출력 NTK
+    debug: False
+    correction: False
+    grad_chunksize: 2000000               # 파라미터 chunk 크기 (RAM 여유되면 크게, 부족하면 작게)
+    image_batch: 16                       # 그래디언트 계산 배치 (per-sample loop이라 실제론 순차)
+  num_labels: 10
+
+dshap_com: !Fast_Data_Shapley
+  dataset: *id_dataset
+  probe_model: *id_probe
+  num_metric: 2                           # (entropy, accuracy) 2가지 메트릭 — 클래스 수 아님
