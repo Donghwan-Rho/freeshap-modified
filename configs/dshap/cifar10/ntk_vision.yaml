@@ -10,7 +10,7 @@ disk_reader: !VisionReader &id_reader
 dataset: !VisionDataset &id_dataset
   args:
     device: cuda:0
-    batchsize: 64
+    batchsize: 256
   data_loader: *id_reader
   prompt: False                           # vision은 prompt 없음
   num_labels: 10
@@ -26,7 +26,7 @@ probe_com: !NTKVisionProbe &id_probe
     debug: False
     correction: False
     grad_chunksize: 2000000               # 파라미터 chunk 크기 (RAM 여유되면 크게, 부족하면 작게)
-    image_batch: 16                       # 그래디언트 계산 배치 (per-sample loop이라 실제론 순차)
+    image_batch: 128                       # 그래디언트 계산 배치 (per-sample loop이라 실제론 순차)
   num_labels: 10
 
 dshap_com: !Fast_Data_Shapley

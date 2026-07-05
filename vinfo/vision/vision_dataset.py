@@ -8,6 +8,7 @@
     - len_train(), len_val() 제공
 """
 import os
+import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset, DataLoader
 from torchvision import datasets, transforms
@@ -29,16 +30,51 @@ def _build_transform(image_size=224):
 
 
 class _DictWrapper(Dataset):
-    """torchvision Subset을 {'image', 'label', 'idx'} dict 아이템으로 감쌈 (freeshap 규약)."""
-    def __init__(self, base_ds, idxs):
+    """torchvision Subset을 {'image', 'label', 'idx'} dict 아이템으로 감쌈 (freeshap 규약).
+
+    ★ 성능 개선: freeshap의 probe.kernel_regression은 val 라벨을 매 콜마다
+      `torch.tensor([i['label'] for i in test_set])`로 뽑음 (probe.py:502 등 6군데).
+      각 iteration은 __getitem__을 호출하고, 기본 torchvision 데이터셋은 매번
+      Resize(224) + ToTensor + Normalize 전체 파이프라인을 재실행함 → vision 슬로우다운의 주범.
+      → 라벨은 base_ds.targets에서 곧바로 캐시 (transform 트리거 없이),
+        이미지는 __init__에서 한 번 미리 transform하여 리스트로 캐시.
+        RAM: 3500 × (3×224²×4B) ≈ 2GB — 여유롭게 맞음. NLP에는 영향 없음(별도 클래스).
+    """
+    def __init__(self, base_ds, idxs, eager_images=True, verbose=True):
         self.base = base_ds
         self.idxs = list(idxs)
+        n = len(self.idxs)
+
+        # ★ 라벨 캐시 — base_ds.targets에서 곧바로 (transform 우회)
+        if hasattr(base_ds, 'targets'):
+            targets = np.asarray(base_ds.targets)
+            self.labels_cache = targets[self.idxs].astype(int).tolist()
+        else:
+            # fallback: transform 통해서 라벨 뽑음
+            self.labels_cache = [int(base_ds[o][1]) for o in self.idxs]
+
+        # ★ 이미지 캐시 — 미리 한 번씩만 transform 실행
+        if eager_images:
+            if verbose:
+                print(f"[_DictWrapper] preloading {n} transformed images ...", flush=True)
+            self.images_cache = [None] * n
+            for i, orig in enumerate(self.idxs):
+                self.images_cache[i], _ = self.base[orig]
+            if verbose:
+                print(f"[_DictWrapper] preload done ({n} images cached).", flush=True)
+        else:
+            self.images_cache = None   # lazy 모드
+
     def __len__(self):
         return len(self.idxs)
+
     def __getitem__(self, i):
-        orig = self.idxs[i]
-        img, lab = self.base[orig]
-        return {'image': img, 'label': int(lab), 'idx': int(orig)}
+        lab = self.labels_cache[i]
+        if self.images_cache is not None:
+            img = self.images_cache[i]
+        else:
+            img, _ = self.base[self.idxs[i]]
+        return {'image': img, 'label': lab, 'idx': int(self.idxs[i])}
 
 
 class VisionReader(InitYAMLObject):

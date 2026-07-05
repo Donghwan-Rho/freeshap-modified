@@ -17,8 +17,10 @@ compute_ntk: chunked per-sample Jacobian
 
 approximate/eigen/nystrom/kernel_regression 등 하류 로직은 NTKProbe에서 상속.
 """
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import models
 from easydict import EasyDict as edict
@@ -187,6 +189,93 @@ class NTKVisionProbe(NTKProbe):
         if self.normalize:
             self.ntk = self.ntk / 10000.0
         return ntk_acc
+
+    # ---------------------------------------------------------------
+    # kernel_regression override — Vision 특화 fast path
+    # freeshap probe.py:490의 kernel_regression을 대체.
+    # 개선 3가지:
+    #   (1) val label을 test_set 처음 볼 때 GPU tensor로 캐시 → 매 콜마다
+    #       [i['label'] for i in test_set] 순회 안 함.
+    #   (2) NTK 서브블록(K_trtr, K_tetr) + Y_train one-hot을 GPU에 한 번만 캐시.
+    #       매 콜은 index_select만.
+    #   (3) inv 모드에서 shapleyNTKRegression 객체 생성 우회, torch.linalg.solve
+    #       직접 호출. eigen/nystrom은 freeshap의 EigenNTKRegression 재사용
+    #       (그 forward 자체는 이미 tight).
+    # NLP NTKProbe는 영향 X (다른 클래스). 삭제 시 vinfo/vision/ 전체 rm.
+    # ---------------------------------------------------------------
+    def _vision_ensure_gpu_cache(self):
+        """NTK 서브블록/y_train one-hot을 GPU에 캐시. self.ntk가 바뀌면 재구성."""
+        if self.ntk is None:
+            raise RuntimeError("[NTKVisionProbe] self.ntk is None. compute_ntk 먼저 호출.")
+        cur_id = id(self.ntk)
+        if getattr(self, '_vg_cache_id', None) == cur_id:
+            return
+        dev = self.device
+        ntk0 = self.ntk[0]                                # [n_all, n_train]
+        n_train = self.ntk.size(2)
+        self._vg_K_trtr = ntk0[:n_train, :].to(dev, non_blocking=True).contiguous()   # [n_train, n_train]
+        self._vg_K_tetr = ntk0[n_train:, :].to(dev, non_blocking=True).contiguous()   # [n_val_or_test, n_train]
+        # y_train one-hot
+        y_tr = self.train_labels.long()
+        self._vg_Y_train_onehot = F.one_hot(y_tr, num_classes=self.num_labels).to(
+            device=dev, dtype=self._vg_K_trtr.dtype)
+        self._vg_cache_id = cur_id
+        # val 라벨 캐시 무효화
+        self._vg_val_id = None
+
+    def _vision_ensure_val_labels(self, test_set):
+        """test_set의 val 라벨을 GPU tensor로 한 번만 캐시. `labels_cache`가 있으면 지름길."""
+        ts_id = id(test_set)
+        if getattr(self, '_vg_val_id', None) == ts_id:
+            return self._vg_val_labels
+        if hasattr(test_set, 'labels_cache') and test_set.labels_cache is not None:
+            arr = np.asarray(test_set.labels_cache, dtype=np.int64)
+            y_val = torch.from_numpy(arr).to(self.device)
+        else:
+            # fallback: 원본 방식 (한 번만 실행됨)
+            y_val = torch.tensor([i['label'] for i in test_set],
+                                 device=self.device, dtype=torch.long)
+        self._vg_val_labels = y_val
+        self._vg_val_id = ts_id
+        return y_val
+
+    def kernel_regression(self, train_indices, test_set, per_point=False):
+        """Vision-optimized override of NTKProbe.kernel_regression.
+        반환 규약은 원본과 동일:
+          per_point=True  → (test_loss numpy [n_val], test_acc tensor [n_val])
+          per_point=False → (test_loss float, test_acc scalar tensor)
+        """
+        self._vision_ensure_gpu_cache()
+        y_val = self._vision_ensure_val_labels(test_set)
+        dev = self.device
+
+        if self.approximate_ntk == 'eigen':
+            self.prepare_eigen_regression()
+            test_preds = self.eigen_regression(train_indices)      # 이미 GPU tensor
+        elif self.approximate_ntk == 'nystrom':
+            self.prepare_nystrom_regression()
+            test_preds = self.nystrom_regression(train_indices)
+        elif self.approximate_ntk == 'inv' or self.approximate_ntk is None:
+            # inv 모드: shapleyNTKRegression 우회, inline solve.
+            idx = torch.as_tensor(train_indices, device=dev, dtype=torch.long)
+            K_SS  = self._vg_K_trtr.index_select(0, idx).index_select(1, idx)   # [k, k]
+            Y_S   = self._vg_Y_train_onehot.index_select(0, idx)                 # [k, C]
+            K_teS = self._vg_K_tetr.index_select(1, idx)                         # [n_val, k]
+            reg   = self.inv_lam * torch.eye(idx.size(0), device=dev, dtype=K_SS.dtype)
+            alpha = torch.linalg.solve(K_SS + reg, Y_S)                          # [k, C]
+            test_preds = K_teS @ alpha                                           # [n_val, C]
+        else:
+            # 알려지지 않은 모드 → 부모(freeshap)로 fallback
+            return super().kernel_regression(train_indices, test_set, per_point=per_point)
+
+        test_preds = test_preds.to(dev)
+        if per_point:
+            test_acc  = (test_preds.argmax(dim=1) == y_val).float().detach().cpu()
+            test_loss = F.cross_entropy(test_preds, y_val, reduction='none').detach().cpu().numpy()
+            return test_loss, test_acc
+        test_acc  = (test_preds.argmax(dim=1) == y_val).float().mean().detach().cpu()
+        test_loss = F.cross_entropy(test_preds, y_val, reduction='mean').item()
+        return test_loss, test_acc
 
 
 # =============================================================================
