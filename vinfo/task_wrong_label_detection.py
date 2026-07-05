@@ -103,17 +103,25 @@ def parse_args():
     parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
     parser.add_argument("--approximate", type=str, default="inv",
-                        choices=["inv", "eigen", "none"])
+                        choices=["inv", "eigen", "nystrom", "none"])
     parser.add_argument("--eigen_rank", type=int, default=30,
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10%% of data)")
-    parser.add_argument("--inv_lambda_", type=float, default=1e-6,
-                        help="Lambda (regularization parameter) for INV mode")
     parser.add_argument("--eigen_lambda_", type=float, default=1e-2,
                         help="Lambda (regularization parameter) for Eigen mode")
+    # ★ nystrom 인자 신규 추가
+    parser.add_argument("--nystrom_d", type=int, default=30,
+                        help="Nystrom rank as percentage of num_train_dp (e.g., 10 means 10%% of data)")
+    parser.add_argument("--nystrom_lambda_", type=float, default=1e-2,
+                        help="Lambda (regularization parameter) for Nystrom mode")
+    parser.add_argument("--inv_lambda_", type=float, default=1e-6,
+                        help="Lambda (regularization parameter) for INV mode")
     parser.add_argument("--poison_pct", type=int, default=10,
                         help="Percentage of training labels to flip (e.g., 10 means 10%%)")
-    parser.add_argument("--poison_seed", type=int, default=2023,
-                        help="Random seed for poison index generation (must match dataset.py: random.seed(2023))")
+    # ★ poison_seed default=None → args.seed 로 자동 통합 (n05_0.sh 스타일)
+    parser.add_argument("--poison_seed", type=int, default=None,
+                        help="Random seed for poison indices. If None (default), uses --seed for unified control "
+                             "(n05_0.sh style). Explicitly set to a value (e.g., 2023) for backward compat with "
+                             "older pkls that used hardcoded seed=2023.")
     parser.add_argument("--num_train_selected_list", type=int, nargs='+',
                         default=[i for i in range(1, 101)],
                         help="List of percentages (1-100) to inspect from lowest Shapley")
@@ -139,7 +147,15 @@ def main():
     eigen_lambda_ = args.eigen_lambda_
     log_early_stopping = args.log_early_stopping
     poison_pct = args.poison_pct
-    poison_seed = args.poison_seed
+    # ★ poison_seed=None → --seed로 자동 통합 (n05_0.sh 스타일)
+    poison_seed = args.poison_seed if args.poison_seed is not None else seed
+    print(f"[info] seed={seed}  poison_seed={poison_seed}  "
+          f"({'unified with --seed' if args.poison_seed is None else 'explicit override'})")
+
+    # ★ nystrom 파라미터
+    nystrom_d_pct = args.nystrom_d
+    nystrom_d = int(num_train_dp * nystrom_d_pct / 100)
+    nystrom_lambda_ = args.nystrom_lambda_
 
     # Initialize timing info dictionary
     timing_info = {}
@@ -182,6 +198,11 @@ def main():
     probe_model = yaml_args["probe_com"]
     dshap_com = yaml_args["dshap_com"]
 
+    # ★ EasyReader에 poison_seed 주입 (dataset.py에서 random.seed(self.poison_seed) 실행)
+    # data_loader가 EasyReader 인스턴스. 여기 attribute 세팅해두면 yield_dataset이 이 seed 사용.
+    if hasattr(list_dataset, 'data_loader'):
+        list_dataset.data_loader.poison_seed = poison_seed
+
     # Enable early stopping logging if requested
     if log_early_stopping:
         dshap_com.log_early_stopping = True
@@ -200,6 +221,14 @@ def main():
             solver=eigen_solver,
             dtype=eigen_dtype,
             seed=seed
+        )
+    elif approximate == "nystrom":  # ★ 신규 nystrom 브랜치
+        probe_model.set_nystrom_params(
+            d=nystrom_d,
+            lam=nystrom_lambda_,
+            solver=eigen_solver,      # 같은 solver/dtype 재사용
+            dtype=eigen_dtype,
+            landmark_seed=seed,       # landmark 뽑는 seed도 --seed 로 통합
         )
     elif approximate == "inv":
         probe_model.set_inv_params(lam=inv_lambda_)
@@ -254,7 +283,7 @@ def main():
         eigen_start_time = time_module.time()
         probe_model.prepare_eigen_regression()
         eigen_total_time = time_module.time() - eigen_start_time
-        
+
         if hasattr(probe_model, 'eigen_regression') and probe_model.eigen_regression is not None:
             eigendecom_time = probe_model.eigen_regression.eigen_decomposition_time
             timing_info['eigendecomposition'] = eigendecom_time
@@ -263,6 +292,14 @@ def main():
             print(f"[TIMING] Eigendecomposition time: {eigendecom_time:.4f}s")
             print(f"[TIMING] Total eigen preparation time: {eigen_total_time:.4f}s")
             print(f"[TIMING] Overhead (non-decomposition): {eigen_total_time - eigendecom_time:.4f}s")
+    elif approximate == "nystrom":   # ★ 신규
+        print("[info] Preparing nystrom regression features...")
+        import time as time_module
+        nys_start_time = time_module.time()
+        probe_model.prepare_nystrom_regression()
+        nys_total_time = time_module.time() - nys_start_time
+        timing_info['nystrom_preparation_total'] = nys_total_time
+        print(f"[TIMING] Nystrom preparation time: {nys_total_time:.4f}s")
 
     print("len(train_set) =", len(train_set))
     print("len(val_set)   =", len(val_set))
@@ -273,11 +310,18 @@ def main():
     if approximate == "eigen":
         lambda_str = f"{eigen_lambda_:.0e}"
         extra_tag = f"_eig{eigen_rank_pct}_lam{lambda_str}_{eigen_solver}_{eigen_dtype}"
+    elif approximate == "nystrom":   # ★ 신규
+        lambda_str = f"{nystrom_lambda_:.0e}"
+        extra_tag = f"_nys{nystrom_d_pct}_lam{lambda_str}_{eigen_solver}_{eigen_dtype}"
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"
 
+    # ★ poison_seed suffix — 기존 pkl(hardcoded 2023)과 명시적으로 구분.
+    # backward compat: 2023이면 suffix 없이 예전 경로 그대로 재사용 가능.
     poison_tag = f"_poison{poison_pct}"
+    if poison_seed != 2023:
+        poison_tag += f"_ps{poison_seed}"
 
     shapley_base = f"./freeshap_res/shapley/{dataset_name}"
     shapley_path = (
@@ -619,6 +663,10 @@ def main():
             f.write(f"eigen rank: {eigen_rank_pct}% (actual: {eigen_rank})\n")
             f.write(f"solver: {eigen_solver}, dtype: {eigen_dtype}\n")
             f.write(f"eigen mode lambda={eigen_lambda_:.0e}\n")
+        elif approximate == "nystrom":   # ★ 신규
+            f.write(f"nystrom d: {nystrom_d_pct}% (actual: {nystrom_d})\n")
+            f.write(f"solver: {eigen_solver}, dtype: {eigen_dtype}\n")
+            f.write(f"nystrom mode lambda={nystrom_lambda_:.0e}\n")
         else:
             f.write(f"inv mode lambda={inv_lambda_:.0e}\n")
 

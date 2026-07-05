@@ -175,7 +175,11 @@ class NTKVisionProbe(NTKProbe):
                         g = p.grad.reshape(-1)
                         J_chunk[i, ds:ds+(le-ls)] = g[ls:le].detach().cpu()
 
-            ntk_acc += J_chunk @ J_chunk[:n_train].t()
+            # ★ NTK 누적 matmul: CPU 대신 GPU에서 row/col 블록 분할로 수행 (~50~100x 가속)
+            if torch.cuda.is_available():
+                ntk_acc += _ntk_matmul_gpu_blocked(J_chunk, n_train, self.device)
+            else:
+                ntk_acc += J_chunk @ J_chunk[:n_train].t()
             del J_chunk
             if torch.cuda.is_available(): torch.cuda.empty_cache()
 
@@ -281,6 +285,43 @@ class NTKVisionProbe(NTKProbe):
 # =============================================================================
 # 헬퍼
 # =============================================================================
+def _ntk_matmul_gpu_blocked(J_chunk, n_train, device, mem_frac=0.5, min_col_block=10_000):
+    """NTK += J_chunk @ J_chunk[:n_train].T 를 GPU에서 row/col 블록 분할로 계산.
+
+    J_chunk는 CPU에 그대로 두고, GPU엔 [n_train, col_block] + [row_block, col_block]
+    슬라이스만 올림. GPU 메모리 여유에 맞춰 col_block을 자동 튜닝.
+
+    Returns: [n_all, n_train] CPU tensor.
+    """
+    n_all, P = J_chunk.shape
+    # 가용 GPU 메모리 기준으로 col_block 결정 (train slice가 가장 크다)
+    try:
+        avail = torch.cuda.mem_get_info(device)[0]
+    except Exception:
+        avail = 4 * 1024**3   # fallback 4GB
+    budget = int(avail * mem_frac)
+    col_block = min(P, max(min_col_block, budget // (n_train * 4)))
+    row_block = min(n_all, 1024)
+
+    result_gpu = torch.zeros(n_all, n_train, device=device, dtype=torch.float32)
+    n_col_chunks = (P + col_block - 1) // col_block
+    for ci, c0 in enumerate(range(0, P, col_block)):
+        c1 = min(c0 + col_block, P)
+        # train slice를 GPU에 한 번만 올려 재사용
+        tr_slice = J_chunk[:n_train, c0:c1].to(device, non_blocking=True)  # [n_train, cb]
+        for r0 in range(0, n_all, row_block):
+            r1 = min(r0 + row_block, n_all)
+            row_slice = J_chunk[r0:r1, c0:c1].to(device, non_blocking=True)  # [rb, cb]
+            result_gpu[r0:r1].addmm_(row_slice, tr_slice.T)
+            del row_slice
+        del tr_slice
+        torch.cuda.synchronize(device)
+    result = result_gpu.cpu()
+    del result_gpu
+    torch.cuda.empty_cache()
+    return result
+
+
 def _load_resnet(name: str, seed: int = 2024):
     torch.manual_seed(seed)
     if name == 'resnet-18_pretrained':

@@ -25,7 +25,7 @@ probe_com: !NTKVisionProbe &id_probe
     single_kernel: True                   # 스칼라 출력 NTK
     debug: False
     correction: False
-    grad_chunksize: 2000000               # 파라미터 chunk 크기 (RAM 여유되면 크게, 부족하면 작게)
+    grad_chunksize: 1000000               # 파라미터 chunk 크기 (RAM 여유되면 크게, 부족하면 작게)
     image_batch: 128                       # 그래디언트 계산 배치 (per-sample loop이라 실제론 순차)
   num_labels: 10
 
