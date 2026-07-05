@@ -48,3 +48,4 @@ vinfo/freeshap_res/claude_research/scripts/fonts/*.ttf
 **/*.pkl
 __pycache__/
 *.pyc
+vinfo/datasets_vision/
