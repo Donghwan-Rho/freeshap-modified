@@ -398,6 +398,9 @@ class EasyReader(Loader):
       self.data_poison = args['data_poison']
     else:
       self.data_poison = False
+    # ★ 신규: poison_seed 파라미터화 (default 2023 = 기존 hardcoded 값과 backward compat)
+    # 외부(task 스크립트)에서 attribute로 override 가능: reader.poison_seed = args.seed
+    self.poison_seed = args['poison_seed'] if 'poison_seed' in args else 2023
 
   def yield_dataset(self, split_string):
     from datasets import load_dataset
@@ -434,7 +437,7 @@ class EasyReader(Loader):
     if data_poison:
       num_to_flip = int(nrows * 0.1)
       import random
-      random.seed(2023)
+      random.seed(self.poison_seed)  # ← hardcoded 2023 → self.poison_seed (외부에서 주입 가능)
       indices_to_flip = random.sample(range(nrows), num_to_flip)
 
     if self.dataset_name == "sst2":
