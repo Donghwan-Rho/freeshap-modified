@@ -46,6 +46,12 @@ vinfo/freeshap_res/claude_research/scripts/fonts/*.ttf
 
 # pkl files always ignored (catches shapley/*.pkl, ntk/*.pkl, etc.)
 **/*.pkl
+# notebooks: work locally on this server only, never commit (also catches *.ipynb.ipynb)
+**/*.ipynb
+.ipynb_checkpoints/
+# figures/reports: generate locally on this server only, never commit
+**/*.pdf
+**/*.png
 __pycache__/
 *.pyc
 vinfo/datasets_vision/
