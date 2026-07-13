@@ -1,0 +1,115 @@
+%% ================================================================
+%% Eigen and Nystrom approximations of the eNTK ridge (FreeShap code)
+%% ================================================================
+%% Requires: amsmath, amssymb, booktabs
+%% Paste as-is into Overleaf.
+
+\section{Eigen and Nystr\"om approximations of the eNTK ridge}
+
+\paragraph{Notation.}
+Let $\mathbf{K}_{\mathrm{tr,tr}}\!\in\!\mathbb{R}^{n\times n}$ be the empirical NTK (eNTK) Gram over the training set of size $n$ and $\mathbf{K}_{\mathrm{te,tr}}\!\in\!\mathbb{R}^{n_{\mathrm{te}}\times n}$ the test--train block.
+FreeShap symmetrizes the train--train block once,
+\begin{equation*}
+\mathbf{K} \;:=\; \tfrac{1}{2}\bigl(\mathbf{K}_{\mathrm{tr,tr}}+\mathbf{K}_{\mathrm{tr,tr}}^{\!\top}\bigr).
+\end{equation*}
+A TMC iteration produces a permutation of $[n]$ and evaluates the model on every prefix subset $S\!\subseteq\![n]$ of size $m=|S|$ with one--hot labels $\mathbf{Y}_S\!\in\!\{0,1\}^{m\times C}$. Both approximations reduce the kernel--ridge problem to a low--dimensional feature matrix $\boldsymbol{\Phi}_{\mathrm{tr}}\!\in\!\mathbb{R}^{n\times k}$ (with $k=r$ for Eigen, $k=d$ for Nystr\"om) computed \emph{once outside TMC}. All per--iteration work then reuses these features.
+
+%% ---------------- Eigen ----------------
+\subsection{Eigen approximation}
+
+\paragraph{Outside TMC (precomputed once).}
+Eigendecompose the symmetrized Gram, $\mathbf{K}=\mathbf{U}\boldsymbol{\Lambda}\mathbf{U}^{\!\top}$, and retain the top--$r$ eigenpairs $(\lambda_i,\mathbf{u}_i)_{i=1}^{r}$ arranged as
+$
+\boldsymbol{\Lambda}_r=\mathrm{diag}(\lambda_1,\dots,\lambda_r), \; \mathbf{U}_r=[\mathbf{u}_1,\dots,\mathbf{u}_r]\in\mathbb{R}^{n\times r}.
+$
+Eigenvalues are numerically clipped to $\lambda_i \gets \max(\lambda_i,10^{-8})$. The eigen--features are
+\begin{equation}
+\boxed{\;
+\boldsymbol{\Phi}_{\mathrm{tr}} \;=\; \mathbf{U}_r\,\boldsymbol{\Lambda}_r^{1/2}\;\in\;\mathbb{R}^{n\times r},
+\qquad
+\boldsymbol{\Phi}_{\mathrm{te}} \;=\; \mathbf{K}_{\mathrm{te,tr}}\,\mathbf{U}_r\,\boldsymbol{\Lambda}_r^{-1/2}\;\in\;\mathbb{R}^{n_{\mathrm{te}}\times r}.\;}
+\label{eq:phi-eigen}
+\end{equation}
+By construction $\boldsymbol{\Phi}_{\mathrm{tr}}\boldsymbol{\Phi}_{\mathrm{tr}}^{\!\top}=\mathbf{U}_r\boldsymbol{\Lambda}_r\mathbf{U}_r^{\!\top}$ is the best rank--$r$ (Eckart--Young) approximation of $\mathbf{K}$, and $\boldsymbol{\Phi}_{\mathrm{te}}\boldsymbol{\Phi}_{\mathrm{tr}}^{\!\top}=\mathbf{K}_{\mathrm{te,tr}}\mathbf{U}_r\mathbf{U}_r^{\!\top}$ is the test--train block projected onto the top--$r$ eigenspace.
+
+\paragraph{Inside TMC (each subset $S$, ridge $\lambda_{\mathrm{eig}}\!>\!0$).}
+Let $\boldsymbol{\Phi}_S = \boldsymbol{\Phi}_{\mathrm{tr}}[S,:]\in\mathbb{R}^{m\times r}$. FreeShap uses an adaptive switch (\emph{kernel space} for small subsets, \emph{feature space} otherwise) to always invert the smaller of the two matrices:
+\begin{align}
+m<r: &\quad
+\boldsymbol{\alpha}=(\boldsymbol{\Phi}_S\boldsymbol{\Phi}_S^{\!\top}+\lambda_{\mathrm{eig}}\mathbf{I}_m)^{-1}\mathbf{Y}_S,\quad
+\widehat{\mathbf{Y}}_{\mathrm{te}}=\boldsymbol{\Phi}_{\mathrm{te}}\boldsymbol{\Phi}_S^{\!\top}\boldsymbol{\alpha},
+\label{eq:eig-kspace}\\[2pt]
+m\ge r: &\quad
+\mathbf{W}=(\boldsymbol{\Phi}_S^{\!\top}\boldsymbol{\Phi}_S+\lambda_{\mathrm{eig}}\mathbf{I}_r)^{-1}\boldsymbol{\Phi}_S^{\!\top}\mathbf{Y}_S,\quad
+\widehat{\mathbf{Y}}_{\mathrm{te}}=\boldsymbol{\Phi}_{\mathrm{te}}\mathbf{W}.
+\label{eq:eig-fspace}
+\end{align}
+The inverse is realized by robust Cholesky: $(\cdot)+\lambda\mathbf{I} = \mathbf{L}\mathbf{L}^{\!\top}$; on numerical failure $\lambda$ is grown geometrically. For $m\!\ge\!500$, $(\boldsymbol{\Phi}_S^{\!\top}\boldsymbol{\Phi}_S+\lambda\mathbf{I}_r)^{-1}$ is cached and updated via Sherman--Morrison when a single sample is appended.
+
+%% ---------------- Nystrom ----------------
+\subsection{Nystr\"om approximation}
+
+\paragraph{Outside TMC (precomputed once).}
+Draw $d$ landmark indices uniformly at random (fixed seed for reproducibility, FreeShap default $\texttt{landmark\_seed}=1234$): $S_{\mathrm{land}}\subset[n]$, $|S_{\mathrm{land}}|=d$. Form the sub--blocks
+\begin{equation*}
+\mathbf{W}=\mathbf{K}[S_{\mathrm{land}},S_{\mathrm{land}}]\in\mathbb{R}^{d\times d},\quad
+\mathbf{C}_{\mathrm{tr}}=\mathbf{K}_{\mathrm{tr,tr}}[:,S_{\mathrm{land}}]\in\mathbb{R}^{n\times d},\quad
+\mathbf{C}_{\mathrm{te}}=\mathbf{K}_{\mathrm{te,tr}}[:,S_{\mathrm{land}}]\in\mathbb{R}^{n_{\mathrm{te}}\times d}.
+\end{equation*}
+Regularize with a \emph{feature--space jitter} $\varepsilon>0$ (FreeShap default $\varepsilon=10^{-8}$) and factor
+$
+\mathbf{W}+\varepsilon\mathbf{I}_d \;=\; \mathbf{L}_w\mathbf{L}_w^{\!\top}
+$
+by Cholesky. The Nystr\"om features are
+\begin{equation}
+\boxed{\;
+\boldsymbol{\Phi}_{\mathrm{tr}} \;=\; \mathbf{C}_{\mathrm{tr}}\,\mathbf{L}_w^{-\top}\;\in\;\mathbb{R}^{n\times d},
+\qquad
+\boldsymbol{\Phi}_{\mathrm{te}} \;=\; \mathbf{C}_{\mathrm{te}}\,\mathbf{L}_w^{-\top}\;\in\;\mathbb{R}^{n_{\mathrm{te}}\times d}.\;}
+\label{eq:phi-nys}
+\end{equation}
+Equivalently, the induced kernel approximation is
+$
+\widehat{\mathbf{K}}^{\mathrm{nys}}
+\;=\;\boldsymbol{\Phi}_{\mathrm{tr}}\boldsymbol{\Phi}_{\mathrm{tr}}^{\!\top}
+\;=\;\mathbf{C}_{\mathrm{tr}}(\mathbf{W}+\varepsilon\mathbf{I}_d)^{-1}\mathbf{C}_{\mathrm{tr}}^{\!\top},
+$
+which recovers the standard uniform Nystr\"om formula when $\varepsilon\!\downarrow\!0$.
+
+\paragraph{Inside TMC (each subset $S$, ridge $\lambda_{\mathrm{nys}}\!>\!0$).}
+Identical to Eqs.~\eqref{eq:eig-kspace}--\eqref{eq:eig-fspace}, with $r$ replaced by $d$ and $\lambda_{\mathrm{eig}}$ replaced by $\lambda_{\mathrm{nys}}$; the same robust Cholesky and Sherman--Morrison caching apply.
+
+%% ---------------- Comparison ----------------
+\subsection{At-a-glance comparison}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Eigen} & \textbf{Nystr\"om} \\
+\midrule
+Basis dim.\ (rank) & $r$ & $d$ \\[1pt]
+Column space of $\boldsymbol{\Phi}_{\mathrm{tr}}$ &
+$\mathrm{span}(\mathbf{u}_1,\dots,\mathbf{u}_r)$ (top eigvecs) &
+$\mathrm{span}\!\bigl(\mathbf{K}[:,S_{\mathrm{land}}]\bigr)$ (random cols) \\[1pt]
+Feature construction &
+$\boldsymbol{\Phi}_{\mathrm{tr}}=\mathbf{U}_r\boldsymbol{\Lambda}_r^{1/2}$ &
+$\boldsymbol{\Phi}_{\mathrm{tr}}=\mathbf{C}_{\mathrm{tr}}(\mathbf{W}+\varepsilon\mathbf{I}_d)^{-1/2}$ \\[1pt]
+Induced kernel &
+$\widehat{\mathbf{K}}^{\mathrm{eig}}=\mathbf{U}_r\boldsymbol{\Lambda}_r\mathbf{U}_r^{\!\top}$ &
+$\widehat{\mathbf{K}}^{\mathrm{nys}}=\mathbf{C}_{\mathrm{tr}}(\mathbf{W}\!+\!\varepsilon\mathbf{I})^{-1}\mathbf{C}_{\mathrm{tr}}^{\!\top}$ \\[1pt]
+Feature--side regularizer &
+none ($\lambda_i$ clipped to $10^{-8}$) &
+jitter $\varepsilon$ (default $10^{-8}$) \\[1pt]
+In--TMC ridge regularizer & $\lambda_{\mathrm{eig}}$ & $\lambda_{\mathrm{nys}}$ \\[1pt]
+Optimality (Frobenius) &
+best rank--$r$ approx.\ (Eckart--Young) &
+sub--optimal; column--sampling bias \\
+\bottomrule
+\end{tabular}
+\caption{Precomputation and in--TMC formulas of Eigen vs.\ Nystr\"om, as implemented in FreeShap.}
+\label{tab:eig-nys}
+\end{table}
+
+Both methods share the identical in--TMC ridge solver \eqref{eq:eig-kspace}--\eqref{eq:eig-fspace}, so all downstream differences originate in the feature matrix $\boldsymbol{\Phi}_{\mathrm{tr}}$: Eigen deterministically spans the top--$r$ eigenspace of $\mathbf{K}$, whereas Nystr\"om spans a uniformly random column subset. When $\mathbf{K}$ has a heavy--tailed spectrum, top eigenvectors typically \emph{do not} lie in the span of a small uniformly--sampled column set, so the Nystr\"om features are systematically misaligned with the dominant modes captured by Eigen.

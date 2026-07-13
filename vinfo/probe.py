@@ -278,7 +278,8 @@ class NTKProbe(Probe):
                          solver: str = "cholesky",
                          dtype: str = "float64",
                          eigen_decom_mode: str = "top",
-                         seed: int = 2023):
+                         seed: int = 2023,
+                         floor: float = 1e-8):
         """Configure eigen decomposition parameters."""
         self.eigen_rank = int(rank)
         self.eigen_lam = float(lam)
@@ -286,6 +287,7 @@ class NTKProbe(Probe):
         self.eigen_dtype = torch.float64 if dtype == "float64" else torch.float32
         self.eigen_decom_mode = eigen_decom_mode
         self.eigen_seed = seed
+        self.eigen_floor = float(floor)   # eigeps
         # Invalidate cached regression model
         self.eigen_regression = None
         self.eigen_regression_dict = {}
@@ -412,7 +414,8 @@ class NTKProbe(Probe):
                 dtype=self.eigen_dtype,
                 device=self.device,
                 eigen_decom_mode=mode_key,
-                seed=getattr(self, 'eigen_seed', 2023)
+                seed=getattr(self, 'eigen_seed', 2023),
+                floor=getattr(self, 'eigen_floor', 1e-8)
             )
             print(f"[NTKProbe] EigenNTKRegression ready (mode={mode_key}).")
         

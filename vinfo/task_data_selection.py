@@ -35,12 +35,40 @@ def parse_args():
                         help="Nystrom landmark count as percentage of num_train_dp (e.g., 10 means 10%% of data), same convention as --eigen_rank")
     parser.add_argument("--nystrom_lambda_", type=float, default=1e-3,
                         help="Lambda (ridge regularization) for Nystrom mode (friend's default = 1e-3)")
-    parser.add_argument("--num_train_selected_list", type=int, nargs='+', 
+    parser.add_argument("--nyseps", type=str, default="1e+1",
+                        help="Nystrom feature-construction jitter ε in (W+εI). "
+                             "Float value or 'auto' (uses σ_min(W)). Default 1e+1.")
+    parser.add_argument("--eigeps", type=str, default="1e-8",
+                        help="Eigen eigenvalue jitter ε: lam -> max(lam,0)+ε. Default 1e-8.")
+    parser.add_argument("--out_root", type=str, default="./freeshap_res",
+                        help="Root dir for shapley/data_selection I/O (NTK read from ./freeshap_res/ntk).")
+    parser.add_argument("--num_train_selected_list", type=int, nargs='+',
                         default=[i for i in range(1, 101)],
                         help="List of percentages (1-100) of num_train_dp to use as training data")
     parser.add_argument("--config", type=str, default="ntk_prompt",
                         help="YAML config name without .yaml extension (e.g., ntk_prompt, ntk_llama)")
     return parser.parse_args()
+
+
+def _fmt_nyseps(eps):
+    """decade 표기: 1e+01 → '1e+1', 1e-08 → '1e-8'. (10배 스케일 실험 전용)"""
+    return f"{eps:.0e}".replace('e+0', 'e+').replace('e-0', 'e-')
+
+
+def _quantize_nyseps(eps):
+    """Filename(1 sig-fig 과학표기)에 맞춰 값 quantize — 파일명↔값 정확 일치. 1e+01 → 10.0."""
+    return float(f"{eps:.0e}")
+
+
+def _compute_nyseps_auto(ntk, num_train_dp, nystrom_d, landmark_seed):
+    """σ_min(W) 계산. W = K[S,S], S = landmark_seed 로 뽑은 subset."""
+    K = ntk[0] if ntk.ndim == 3 else ntk
+    K_np = K.to("cpu", dtype=torch.float64).numpy()[:num_train_dp, :num_train_dp]
+    K_np = 0.5 * (K_np + K_np.T)
+    rng = np.random.RandomState(int(landmark_seed))
+    S = np.sort(rng.choice(num_train_dp, size=nystrom_d, replace=False))
+    W = K_np[np.ix_(S, S)]
+    return float(np.linalg.eigvalsh(W)[0])
 
 
 def main():
@@ -58,7 +86,9 @@ def main():
     eigen_rank_pct = args.eigen_rank
     inv_lambda_ = args.inv_lambda_
     eigen_lambda_ = args.eigen_lambda_
-    
+    eigen_eps = _quantize_nyseps(float(args.eigeps))   # eigen floor (eigeps)
+    eigeps_str = _fmt_nyseps(eigen_eps)
+
     # Calculate actual eigen rank from percentage
     eigen_rank = int(num_train_dp * eigen_rank_pct / 100)
     print(f"[info] eigen_rank={eigen_rank_pct}% of num_dp={num_train_dp} -> actual rank={eigen_rank}")
@@ -106,17 +136,10 @@ def main():
             lam=eigen_lambda_,
             solver=eigen_solver,
             dtype=eigen_dtype,
-            seed=seed
+            seed=seed,
+            floor=eigen_eps
         )
-    elif approximate == "nystrom":
-        probe_model.set_nystrom_params(
-            d=nystrom_d,
-            lam=float(args.nystrom_lambda_),
-            solver=eigen_solver,
-            dtype=eigen_dtype,
-            landmark_seed=seed,
-            jitter=1e-8,
-        )
+    # NOTE: nystrom set_params 는 아래 shapley_path 구성 전에 (NTK 로드 후) 별도로 함
     elif approximate == "inv":
         probe_model.set_inv_params(lam=inv_lambda_)
 
@@ -133,25 +156,54 @@ def main():
     else:
         model_name = 'model'
 
+    # ===== 0.5) nystrom 이면 NTK peek + --nyseps 처리 =====
+    # (extra_tag 구성 전에 nyseps 값이 필요함)
+    nystrom_eps = None
+    nyseps_str  = None
+    if approximate == "nystrom":
+        ntk_path_peek = (
+            f"./freeshap_res/ntk/{dataset_name}/{model_name}"
+            f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
+        )
+        with open(ntk_path_peek, "rb") as f:
+            ntk_peek = pickle.load(f)["ntk"]
+        if str(args.nyseps).lower() == "auto":
+            _raw = _compute_nyseps_auto(ntk_peek, num_train_dp, nystrom_d, seed)
+            print(f"[nyseps auto] σ_min(W) raw = {_raw:.6e}")
+            nystrom_eps = _quantize_nyseps(_raw)
+        else:
+            nystrom_eps = _quantize_nyseps(float(args.nyseps))
+        nyseps_str = _fmt_nyseps(nystrom_eps)
+        print(f"[nyseps] value={nystrom_eps:.4e}  tag='{nyseps_str}'  (quantized to 2 decimal)")
+        probe_model.set_nystrom_params(
+            d=nystrom_d,
+            lam=float(args.nystrom_lambda_),
+            solver=eigen_solver,
+            dtype=eigen_dtype,
+            landmark_seed=seed,
+            jitter=nystrom_eps,
+        )
+        del ntk_peek
+
     # ===== 1) Shapley pkl 경로 구성 및 로드 =====
     method_dir = approximate  # 'inv' or 'eigen'
 
     if approximate == "eigen":
         eigen_lam_str = f"{eigen_lambda_:.0e}"
         inv_lam_str = f"{inv_lambda_:.0e}"
-        extra_tag = f"_eig{eigen_rank_pct}_eiglam{eigen_lam_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
+        extra_tag = f"_eig{eigen_rank_pct}_eiglam{eigen_lam_str}_eigeps{eigeps_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
     elif approximate == "nystrom":
         nys_lam_str = f"{float(args.nystrom_lambda_):.0e}"
         inv_lam_str = f"{inv_lambda_:.0e}"
         extra_tag = (
             f"_nys{nystrom_d_pct}"
-            f"_nyslam{nys_lam_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
+            f"_nyslam{nys_lam_str}_nyseps{nyseps_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
         )
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"
 
-    shapley_base = f"./freeshap_res/shapley/{dataset_name}"
+    shapley_base = f"{args.out_root}/shapley/{dataset_name}"
     shapley_path = (
         f"{shapley_base}/{method_dir}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}"
@@ -216,7 +268,7 @@ def main():
     all_indices = np.arange(len(sampled_idx))
 
     # 출력 경로: freeshap_res/data_selection/{dataset}/{method}/
-    ds_base = f"./freeshap_res/data_selection/{dataset_name}"
+    ds_base = f"{args.out_root}/data_selection/{dataset_name}"
     setting_name = os.path.basename(shapley_path).replace('.pkl', '')
 
     # Save sorted indices (original dataset indices)
@@ -359,7 +411,8 @@ def main():
                 lam=eigen_lambda_,
                 solver=eigen_solver,
                 dtype=eigen_dtype,
-                seed=seed
+                seed=seed,
+                floor=eigen_eps
             )
         elif approximate == "nystrom":
             probe_model.set_nystrom_params(
@@ -368,7 +421,7 @@ def main():
                 solver=eigen_solver,
                 dtype=eigen_dtype,
                 landmark_seed=seed,
-                jitter=1e-8,
+                jitter=nystrom_eps,
             )
 
     # Print results

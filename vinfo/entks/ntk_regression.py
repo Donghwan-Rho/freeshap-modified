@@ -17,7 +17,7 @@ except Exception:
 
 ################################### Kernel regression with Eigen Decomposition ########################################
 class EigenNTKRegression(nn.Module):
-    def __init__(self, ntk_full, y_train, n_class, rank=512, lam=1e-6, solver="cholesky", dtype=torch.float32, device='cuda:0', eigen_decom_mode="top", seed=2023):
+    def __init__(self, ntk_full, y_train, n_class, rank=512, lam=1e-6, solver="cholesky", dtype=torch.float32, device='cuda:0', eigen_decom_mode="top", seed=2023, floor=1e-8):
         # print(f'>>> dtype={dtype}, device={device}')
         """
         Kernel ridge regression using eigen decomposition for efficient computation.
@@ -55,7 +55,8 @@ class EigenNTKRegression(nn.Module):
         self.device = torch.device(device) if isinstance(device, str) else device
         self.eigen_decom_mode = eigen_decom_mode
         self.seed = seed
-        
+        self.floor = float(floor)   # eigenvalue jitter (eigeps): lam -> max(lam,0)+floor
+
         # Initialize timing attribute
         self.eigen_decomposition_time = 0.0
         
@@ -135,8 +136,8 @@ class EigenNTKRegression(nn.Module):
                 U = U[:, idx]
                 method = f"eigsh(top-{d})"
         
-        lam = np.clip(lam, 1e-8, None)
-        
+        lam = np.clip(lam, 0.0, None) + self.floor   # eigeps: additive floor (default 1e-8)
+
         # Compute feature matrices
         Phi_tr = U * np.sqrt(lam)[None, :]
         Phi_te = K_tetr @ (U / np.sqrt(lam)[None, :])

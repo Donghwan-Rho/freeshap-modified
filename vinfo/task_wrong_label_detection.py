@@ -108,11 +108,17 @@ def parse_args():
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10%% of data)")
     parser.add_argument("--eigen_lambda_", type=float, default=1e-2,
                         help="Lambda (regularization parameter) for Eigen mode")
+    parser.add_argument("--eigeps", type=str, default="1e-8",
+                        help="Eigen eigenvalue floor ε (lam=clip(lam,0)+floor). "
+                             "task_shapley와 동일. Default 1e-8.")
     # ★ nystrom 인자 신규 추가
     parser.add_argument("--nystrom_d", type=int, default=30,
                         help="Nystrom rank as percentage of num_train_dp (e.g., 10 means 10%% of data)")
     parser.add_argument("--nystrom_lambda_", type=float, default=1e-2,
                         help="Lambda (regularization parameter) for Nystrom mode")
+    parser.add_argument("--nyseps", type=str, default="1e-8",
+                        help="Nystrom feature-construction jitter ε in (W+εI). "
+                             "Float value or 'auto' (uses σ_min(W)). Default 1e-8.")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
                         help="Lambda (regularization parameter) for INV mode")
     parser.add_argument("--poison_pct", type=int, default=10,
@@ -127,7 +133,31 @@ def parse_args():
                         help="List of percentages (1-100) to inspect from lowest Shapley")
     parser.add_argument("--log_early_stopping", action="store_true",
                         help="Enable logging of early stopping points in TMC iterations")
+    parser.add_argument("--out_root", type=str, default="./freeshap_res",
+                        help="결과 저장 루트 (shapley/wrong_label_detection). "
+                             "NTK 캐시는 항상 ./freeshap_res/ntk 사용. Default ./freeshap_res.")
     return parser.parse_args()
+
+
+def _fmt_nyseps(eps):
+    """1e+02 → '1e+2', 1e-08 → '1e-8' (jitter_exp sweep 포맷과 동일)."""
+    return f"{eps:.0e}".replace('e+0', 'e+').replace('e-0', 'e-')
+
+
+def _quantize_nyseps(eps):
+    """Filename 표기 (compact 과학표기, jitter_exp sweep과 동일) 에 맞춰 값 quantize."""
+    return float(f"{eps:.0e}")
+
+
+def _compute_nyseps_auto(ntk, num_train_dp, nystrom_d, landmark_seed):
+    """σ_min(W) 계산. W = K[S,S], S = landmark_seed 로 뽑은 subset."""
+    K = ntk[0] if ntk.ndim == 3 else ntk
+    K_np = K.to("cpu", dtype=torch.float64).numpy()[:num_train_dp, :num_train_dp]
+    K_np = 0.5 * (K_np + K_np.T)
+    rng = np.random.RandomState(int(landmark_seed))
+    S = np.sort(rng.choice(num_train_dp, size=nystrom_d, replace=False))
+    W = K_np[np.ix_(S, S)]
+    return float(np.linalg.eigvalsh(W)[0])
 
 
 def main():
@@ -145,6 +175,8 @@ def main():
     eigen_rank_pct = args.eigen_rank
     inv_lambda_ = args.inv_lambda_
     eigen_lambda_ = args.eigen_lambda_
+    eigen_eps = float(args.eigeps)
+    out_root = args.out_root
     log_early_stopping = args.log_early_stopping
     poison_pct = args.poison_pct
     # ★ poison_seed=None → --seed로 자동 통합 (n05_0.sh 스타일)
@@ -181,8 +213,8 @@ def main():
     # Dynamic path construction based on dataset_name
     # Use poison YAML config (data_poison: True)
     yaml_path = f"../configs/dshap/{dataset_name}/ntk_prompt_posion.yaml"
-    base_path = f"./freeshap_res/{dataset_name}"
-    detection_base_path = f"./freeshap_res/wrong_label_detection/{dataset_name}"
+    base_path = f"{out_root}/{dataset_name}"
+    detection_base_path = f"{out_root}/wrong_label_detection/{dataset_name}"
 
     # seed 고정 (재현성 보장)
     torch.manual_seed(seed)
@@ -220,16 +252,10 @@ def main():
             lam=eigen_lambda_,
             solver=eigen_solver,
             dtype=eigen_dtype,
-            seed=seed
+            seed=seed,
+            floor=eigen_eps
         )
-    elif approximate == "nystrom":  # ★ 신규 nystrom 브랜치
-        probe_model.set_nystrom_params(
-            d=nystrom_d,
-            lam=nystrom_lambda_,
-            solver=eigen_solver,      # 같은 solver/dtype 재사용
-            dtype=eigen_dtype,
-            landmark_seed=seed,       # landmark 뽑는 seed도 --seed 로 통합
-        )
+    # NOTE: nystrom set_params 는 아래 NTK 로드 후 별도로 함 (--nyseps 처리 위해)
     elif approximate == "inv":
         probe_model.set_inv_params(lam=inv_lambda_)
 
@@ -271,6 +297,27 @@ def main():
     # probe에 NTK 주입
     probe_model.get_cached_ntk(ntk)
 
+    # ===== 1.5) nystrom 이면 --nyseps 처리 후 set_nystrom_params =====
+    nystrom_eps = None
+    nyseps_str  = None
+    if approximate == "nystrom":
+        if str(args.nyseps).lower() == "auto":
+            _raw = _compute_nyseps_auto(ntk, num_train_dp, nystrom_d, seed)
+            print(f"[nyseps auto] σ_min(W) raw = {_raw:.6e}")
+            nystrom_eps = _quantize_nyseps(_raw)
+        else:
+            nystrom_eps = _quantize_nyseps(float(args.nyseps))
+        nyseps_str = _fmt_nyseps(nystrom_eps)
+        print(f"[nyseps] value={nystrom_eps:.4e}  tag='{nyseps_str}'  (quantized to 2 decimal)")
+        probe_model.set_nystrom_params(
+            d=nystrom_d,
+            lam=nystrom_lambda_,
+            solver=eigen_solver,
+            dtype=eigen_dtype,
+            landmark_seed=seed,
+            jitter=nystrom_eps,
+        )
+
     # ===== 2) train/val set 구성 (poison된 라벨이 반영됨) =====
     train_set = list_dataset.get_idx_dataset(sampled_idx, split="train")
     val_set = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
@@ -309,10 +356,11 @@ def main():
 
     if approximate == "eigen":
         lambda_str = f"{eigen_lambda_:.0e}"
-        extra_tag = f"_eig{eigen_rank_pct}_lam{lambda_str}_{eigen_solver}_{eigen_dtype}"
+        eigeps_str = _fmt_nyseps(eigen_eps)
+        extra_tag = f"_eig{eigen_rank_pct}_lam{lambda_str}_eigeps{eigeps_str}_{eigen_solver}_{eigen_dtype}"
     elif approximate == "nystrom":   # ★ 신규
         lambda_str = f"{nystrom_lambda_:.0e}"
-        extra_tag = f"_nys{nystrom_d_pct}_lam{lambda_str}_{eigen_solver}_{eigen_dtype}"
+        extra_tag = f"_nys{nystrom_d_pct}_lam{lambda_str}_nyseps{nyseps_str}_{eigen_solver}_{eigen_dtype}"
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"
@@ -323,7 +371,7 @@ def main():
     if poison_seed != 2023:
         poison_tag += f"_ps{poison_seed}"
 
-    shapley_base = f"./freeshap_res/shapley/{dataset_name}"
+    shapley_base = f"{out_root}/shapley/{dataset_name}"
     shapley_path = (
         f"{shapley_base}/{method_dir}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}"
