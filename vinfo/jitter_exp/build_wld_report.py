@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Wrong-Label-Detection(WLD) 리포트 PDF — build_report.py 의 십자(cross) 구조를 그대로 쓰되
+Wrong-Label-Detection(WLD) 리포트 PDF — build_selection_report.py 의 십자(cross) 구조를 그대로 쓰되
 downstream 을 "selection acc" → "poison detection" 으로 교체한 버전. multi-seed(mean±std).
 
-핵심 차이 (build_report 대비):
+핵심 차이 (build_selection_report 대비):
   * SV 는 poisoned 데이터에서 계산됨 (파일명에 _poison{pct}_ps{seed}).
   * fidelity = corr(approx poisoned-SV, inv poisoned-SV)  (측정 방식은 동일).
   * downstream = detection.txt 의 "detection rates"(최하위 SV 부터 poison recall, k=1~100%).
@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_report import (  # noqa: E402  (generic 헬퍼 재사용)
+from build_selection_report import (  # noqa: E402  (generic 헬퍼 재사용)
     draw_heat, draw_strip, cross_matrices, align, _rank, _mean_std_n,
     load_sv, _fmt_eps, _lam_tag,
 )
@@ -400,6 +400,52 @@ def page_coupling(pdf, a, INV, axis="eps"):
     fig.tight_layout(rect=[0, 0, 1, .96]); pdf.savefig(fig); plt.close(fig)
 
 
+# ============ 페이지: best-config 비교 (random/inv vs method별 최적 sweep) ============
+def _wld_best(a, method, cap):
+    cross = build_cross(a, method)
+    if cross is None: return None
+    best, bauc = None, None
+    for (l, e) in cross["cells"]:
+        dm, _, _ = det_summary_seeds(a, method, l, e, cap)
+        if np.isnan(dm): continue
+        if bauc is None or dm > bauc: bauc, best = dm, (l, e)   # higher detection AUC = better
+    return best
+
+def _inv_det_random(a):
+    rs = []
+    for s in a.seeds:
+        _, rnd = parse_detection(inv_det_path(a, s))
+        if rnd is not None: rs.append(rnd[:100])
+    return np.vstack([r[:min(len(x) for x in rs)] for r in rs]).mean(0) if rs else None
+
+def page_best_compare(pdf, a):
+    K = a.det_k30; ks = list(range(1, 101))
+    invc, _ = inv_det_curve_seeds(a)
+    rndc = _inv_det_random(a)
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5.6), gridspec_kw={"wspace": .28})
+    fig.suptitle(f"[{a.dataset}] WLD best-config — random/inv vs 각 method 최적 sweep "
+                 f"(detection AUC 높을수록 좋음), poison={a.poison}%, seeds={a.seeds}",
+                 fontsize=12.5, fontweight="bold")
+    mcol = {"eigen": "#1f77b4", "nystrom": "#d62728"}
+    for ax, cap, ttl in [(axes[0], 100, "AUC 전체 (k 1~100%)"),
+                         (axes[1], K, f"AUC 저-k (k 1~{K}%)")]:
+        Lx = cap
+        if rndc is not None: ax.plot(ks[:Lx], rndc[:Lx], ":", color="gray", lw=1.4, alpha=.85, label="random")
+        if invc is not None: ax.plot(ks[:Lx], invc[:Lx], "--", color="black", lw=2.0, label="inv (exact)")
+        for method in a.methods:
+            b = _wld_best(a, method, cap)
+            if b is None: continue
+            l, e = b
+            md = det_curve_seeds(a, method, l, e)[0]
+            if md is None: continue
+            dm, _, _ = det_summary_seeds(a, method, l, e, cap)
+            ax.plot(ks[:Lx], md[:Lx], "-", color=mcol.get(method), lw=1.9,
+                    label=f"{METHW[method]['kor']} best (λ={_fmt_eps(l)}, ε={_fmt_eps(e)}) AUC={dm:.3f}")
+        ax.set_title(ttl, fontsize=11); ax.set_xlabel("k% (최하위 SV부터 검사)", fontsize=10)
+        ax.set_ylabel("poison recall (seed 평균)", fontsize=10); ax.grid(True, alpha=.3); ax.legend(fontsize=8)
+    fig.tight_layout(rect=[0, 0, 1, .95]); pdf.savefig(fig); plt.close(fig)
+
+
 def main():
     a = parse_args()
     if a.val is None:
@@ -418,6 +464,7 @@ def main():
             page_fidelity(pdf, a, meth, INV)
         page_curves(pdf, a, "eps")
         page_curves(pdf, a, "lam")
+        page_best_compare(pdf, a)
         page_coupling(pdf, a, INV, "eps")
         page_coupling(pdf, a, INV, "lam")
     print(f"[write] {out}")
