@@ -11,9 +11,9 @@ inv_top_f15_accuracy:
 inv_top_f20_accuracy:
 5470
 inv_top_f25_accuracy:
-5654
+5665
 inv_top_f30_accuracy:
-6433
+6422
 eigen_base_accuracy:
 4908
 eigen_top_f1_accuracy:
@@ -27,6 +27,6 @@ eigen_top_f15_accuracy:
 eigen_top_f20_accuracy:
 5287
 eigen_top_f25_accuracy:
-5608
+5596
 eigen_top_f30_accuracy:
-6044
+6078
