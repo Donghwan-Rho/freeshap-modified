@@ -16,5 +16,5 @@ random:
 timing info (from shapley pkl):
   used_gpu_count: 1
   gpu_index: cuda:0
-  gpu_model: NVIDIA RTX A6000
-  shapley_computation: 4175.9749s
+  gpu_model: NVIDIA H100 NVL
+  shapley_computation: 4352.5039s
