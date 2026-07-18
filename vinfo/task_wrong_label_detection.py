@@ -121,6 +121,9 @@ def parse_args():
                              "Float value or 'auto' (uses σ_min(W)). Default 1e-8.")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
                         help="Lambda (regularization parameter) for INV mode")
+    parser.add_argument("--config", type=str, default="ntk_prompt",
+                        help="YAML config name without .yaml extension (ntk_prompt=bert, ntk_llama=llama). "
+                             "wld loads the poison variant '{config}_poison.yaml'.")
     parser.add_argument("--poison_pct", type=int, default=10,
                         help="Percentage of training labels to flip (e.g., 10 means 10%%)")
     # ★ poison_seed default=None → args.seed 로 자동 통합 (n05_0.sh 스타일)
@@ -210,9 +213,10 @@ def main():
     per_point = True
     early_stopping = "True"
 
-    # Dynamic path construction based on dataset_name
-    # Use poison YAML config (data_poison: True)
-    yaml_path = f"../configs/dshap/{dataset_name}/ntk_prompt_posion.yaml"
+    # Dynamic path construction based on dataset_name + --config
+    # Use poison YAML variant (data_poison: True). {config}_poison selects the model:
+    #   ntk_prompt -> ntk_prompt_poison.yaml (bert),  ntk_llama -> ntk_llama_poison.yaml (llama)
+    yaml_path = f"../configs/dshap/{dataset_name}/{args.config}_poison.yaml"
     base_path = f"{out_root}/{dataset_name}"
     detection_base_path = f"{out_root}/wrong_label_detection/{dataset_name}"
 
