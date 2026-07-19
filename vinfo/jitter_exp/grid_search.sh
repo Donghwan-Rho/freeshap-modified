@@ -14,11 +14,11 @@
 # 모든 task 가 기존 결과 있으면 로드/skip → 재실행 안전(증분).
 # 사용:  sh jitter_exp/grid_search.sh
 # ============================================================
-cd /extdata1/donghwan/freeshap/vinfo
-PY=/home/donghwan/.conda/envs/freeshap/bin/python
+cd ..
+# PY=/home/donghwan/.conda/envs/freeshap/bin/python
 
 SEEDS="2024 2025 2026"
-DATASETS="qqp mr rte sst2 mnli ag_news mrpc"
+DATASETS="mr mrpc"
 NYS_LAMS="1e-4 1e-3 1e-2 1e-1"; NYS_EPSS="1e-1 1 1e+1 1e+2"
 EIG_LAMS="1e-3 1e-2 1e-1 1";    EIG_EPSS="1e-8 1e-6 1e-4 1e-2"
 REM="$(seq -s' ' 0 99)"          # removal 제거 % 격자: 0~99 1%씩 (run_removal.sh 와 동일해야 함)
@@ -36,63 +36,16 @@ for S in $SEEDS; do
     esac
     echo "################ $D (val=$V)  seed=$S ################"
 
-    # ========== 1) inv (exact 기준선) — out_root=./freeshap_res ==========
-    echo "[inv] $D seed$S"
-    $PY task_shapley.py --config ntk_prompt --seed $S --dataset_name $D \
-      --num_train_dp 2000 --val_sample_num $V --approximate inv \
-      --inv_lambda_ 1e-6 --tmc_iter 500 --out_root ./freeshap_res
-    $PY task_data_selection.py --config ntk_prompt --seed $S --dataset_name $D \
-      --num_train_dp 2000 --val_sample_num $V --approximate inv \
-      --inv_lambda_ 1e-6 --tmc_iter 500 --out_root ./freeshap_res
-    $PY task_data_removal.py --config ntk_prompt --seed $S --dataset_name $D \
-      --num_train_dp 2000 --val_sample_num $V --approximate inv \
-      --inv_lambda_ 1e-6 --tmc_iter 500 --out_root ./freeshap_res \
-      --num_train_removed_list $REM
-
-    # ========== 2) nystrom 4x4 — out_root=./jitter_exp/res ==========
-    for L in $NYS_LAMS; do
-      for E in $NYS_EPSS; do
-        echo "[nys] $D seed$S lam=$L eps=$E"
-        $PY task_shapley.py --config ntk_prompt --seed $S --dataset_name $D \
-          --num_train_dp 2000 --val_sample_num $V --approximate nystrom --nystrom_d 20 \
-          --inv_lambda_ 1e-6 --nystrom_lambda_ $L --nyseps $E --tmc_iter 500 --out_root ./jitter_exp/res
-        $PY task_data_selection.py --config ntk_prompt --seed $S --dataset_name $D \
-          --num_train_dp 2000 --val_sample_num $V --approximate nystrom --nystrom_d 20 \
-          --inv_lambda_ 1e-6 --nystrom_lambda_ $L --nyseps $E --tmc_iter 500 --out_root ./jitter_exp/res
-        $PY task_data_removal.py --config ntk_prompt --seed $S --dataset_name $D \
-          --num_train_dp 2000 --val_sample_num $V --approximate nystrom --nystrom_d 20 \
-          --inv_lambda_ 1e-6 --nystrom_lambda_ $L --nyseps $E --tmc_iter 500 --out_root ./jitter_exp/res \
-          --num_train_removed_list $REM
-      done
-    done
-
-    # ========== 3) eigen 4x4 — out_root=./jitter_exp/res ==========
-    for L in $EIG_LAMS; do
-      for E in $EIG_EPSS; do
-        echo "[eig] $D seed$S lam=$L eps=$E"
-        $PY task_shapley.py --config ntk_prompt --seed $S --dataset_name $D \
-          --num_train_dp 2000 --val_sample_num $V --approximate eigen --eigen_rank 20 \
-          --inv_lambda_ 1e-6 --eigen_lambda_ $L --eigeps $E --tmc_iter 500 --out_root ./jitter_exp/res
-        $PY task_data_selection.py --config ntk_prompt --seed $S --dataset_name $D \
-          --num_train_dp 2000 --val_sample_num $V --approximate eigen --eigen_rank 20 \
-          --inv_lambda_ 1e-6 --eigen_lambda_ $L --eigeps $E --tmc_iter 500 --out_root ./jitter_exp/res
-        $PY task_data_removal.py --config ntk_prompt --seed $S --dataset_name $D \
-          --num_train_dp 2000 --val_sample_num $V --approximate eigen --eigen_rank 20 \
-          --inv_lambda_ 1e-6 --eigen_lambda_ $L --eigeps $E --tmc_iter 500 --out_root ./jitter_exp/res \
-          --num_train_removed_list $REM
-      done
-    done
-
     # ========== 4) wld (poison ${POISON}%) — inv → nys 4x4 → eig 4x4, 전부 ./jitter_exp/res ==========
     echo "[wld-inv] $D seed$S"
-    $PY task_wrong_label_detection.py --dataset_name $D --seed $S \
+    python task_wrong_label_detection.py --dataset_name $D --seed $S \
       --num_train_dp 2000 --val_sample_num $V --approximate inv \
       --inv_lambda_ 1e-6 --poison_pct $POISON --tmc_iter 500 --out_root ./jitter_exp/res
 
     for L in $NYS_LAMS; do
       for E in $NYS_EPSS; do
         echo "[wld-nys] $D seed$S lam=$L eps=$E"
-        $PY task_wrong_label_detection.py --dataset_name $D --seed $S \
+        python task_wrong_label_detection.py --dataset_name $D --seed $S \
           --num_train_dp 2000 --val_sample_num $V --approximate nystrom --nystrom_d 20 \
           --inv_lambda_ 1e-6 --nystrom_lambda_ $L --nyseps $E \
           --poison_pct $POISON --tmc_iter 500 --out_root ./jitter_exp/res
@@ -102,7 +55,7 @@ for S in $SEEDS; do
     for L in $EIG_LAMS; do
       for E in $EIG_EPSS; do
         echo "[wld-eig] $D seed$S lam=$L eps=$E"
-        $PY task_wrong_label_detection.py --dataset_name $D --seed $S \
+        python task_wrong_label_detection.py --dataset_name $D --seed $S \
           --num_train_dp 2000 --val_sample_num $V --approximate eigen --eigen_rank 20 \
           --inv_lambda_ 1e-6 --eigen_lambda_ $L --eigeps $E \
           --poison_pct $POISON --tmc_iter 500 --out_root ./jitter_exp/res
