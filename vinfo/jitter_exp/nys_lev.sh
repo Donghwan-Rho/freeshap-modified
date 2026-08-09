@@ -1,11 +1,12 @@
 #!/bin/sh
 # ============================================================
-# leverage-score Nystrom (nystrom_lev) probe — rank sweep.
+# leverage-score Nystrom (nystrom_lev) probe — rank sweep, llama (ntk_llama) 버전.
 #   pinv 와 동일한 pseudoinverse 구성, landmark 만 uniform -> ridge-leverage 표집.
 #   ridge leverage: l_i = [K(K + lam*n I)^{-1}]_ii  (lam = --nystrom_lambda_)
 # 완전 격리: out_root=./jitter_exp/nys_lev_res, method_dir=nystrom_lev, 태그 _nyslev.
 #   기존 eigen/nystrom/nystrom_pinv 결과·경로에 영향 없음. NTK 는 ./freeshap_res/ntk 공유.
-# KPS(rel_error) rank 비교용 세팅: eigen/pinv 와 동일 (lam=1e-2, eps=1e-8).
+# KPS(rel_error) rank 비교용 세팅: eigen/pinv 와 동일 (lam=1e-2, eps=1e-8). num_train=2000 고정.
+# wrong-label 은 {config}_poison.yaml (ntk_llama_poison) 로 poison 데이터 로드.
 #
 # 사용: 인자에서 숫자 -> seed, 문자 -> dataset 으로 자동 분류 (순서 무관).
 #   sh jitter_exp/nys_lev.sh                     # seed 2024 2025 2026 x dataset 7개 전부
@@ -17,6 +18,7 @@
 cd /extdata1/donghwan/freeshap/vinfo
 PY=/home/donghwan/.conda/envs/freeshap/bin/python
 REM="$(seq -s' ' 0 99)"
+OUT=./jitter_exp/nys_lev_res
 
 # ---- 인자 분류: 숫자=seed, 그 외=dataset ----
 SEEDS=""; DATASETS=""
@@ -43,18 +45,50 @@ for S in $SEEDS; do
 
     for R in 1 5 10 15 20 25 30; do
       echo "[lev] $D (val=$V) seed$S rank=${R}%"
-      $PY task_shapley.py --config ntk_prompt --seed $S --dataset_name $D \
-        --num_train_dp 2000 --val_sample_num $V --approximate nystrom_lev --nystrom_d $R \
-        --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
-        --out_root ./jitter_exp/nys_lev_res
-      $PY task_data_selection.py --config ntk_prompt --seed $S --dataset_name $D \
-        --num_train_dp 2000 --val_sample_num $V --approximate nystrom_lev --nystrom_d $R \
-        --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
-        --out_root ./jitter_exp/nys_lev_res
-      $PY task_data_removal.py --config ntk_prompt --seed $S --dataset_name $D \
-        --num_train_dp 2000 --val_sample_num $V --approximate nystrom_lev --nystrom_d $R \
-        --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
-        --out_root ./jitter_exp/nys_lev_res --num_train_removed_list $REM
+
+      # ---- 결과 파일 경로 (이미 있으면 해당 task 스킵) ----
+      # shapley/selection/removal 파일명: _nyslev{R}.0_nyslam..._invlam... (신형)
+      # wrong-label 파일명: _nyslev{R}_lam..._poison10_ps{seed} (wld 고유 형식)
+      STEM="llama_seed${S}_num2000_val${V}_nyslev${R}.0_nyslam1e-02_nyseps1e-8_invlam1e-06_cholesky_float32_signFalse_earlystopTrue_tmc500"
+      WSTEM="llama_seed${S}_num2000_val${V}_nyslev${R}_lam1e-02_nyseps1e-8_cholesky_float32_signFalse_earlystopTrue_tmc500_poison10_ps${S}"
+      SV_PKL=$OUT/shapley/$D/nystrom_lev/${STEM}.pkl
+      SEL_TXT=$OUT/data_selection/$D/nystrom_lev/indices/${STEM}_indices.txt
+      REM_TXT=$OUT/data_removing/$D/nystrom_lev/predictions/${STEM}_predictions.txt
+      WLD_TXT=$OUT/wrong_label_detection/$D/nystrom_lev/predictions/${WSTEM}_detection.txt
+      WLD_PKL=$OUT/wrong_label_detection/$D/nystrom_lev/predictions/${WSTEM}_detection.pkl
+
+      if [ -f "$SV_PKL" ]; then
+        echo "  [skip] shapley  ($SV_PKL)"
+      else
+        $PY task_shapley.py --config ntk_llama --seed $S --dataset_name $D \
+          --num_train_dp 2000 --val_sample_num $V --approximate nystrom_lev --nystrom_d $R \
+          --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
+          --out_root $OUT
+      fi
+      if [ -f "$SEL_TXT" ]; then
+        echo "  [skip] selection ($SEL_TXT)"
+      else
+        $PY task_data_selection.py --config ntk_llama --seed $S --dataset_name $D \
+          --num_train_dp 2000 --val_sample_num $V --approximate nystrom_lev --nystrom_d $R \
+          --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
+          --out_root $OUT
+      fi
+      if [ -f "$REM_TXT" ]; then
+        echo "  [skip] removal  ($REM_TXT)"
+      else
+        $PY task_data_removal.py --config ntk_llama --seed $S --dataset_name $D \
+          --num_train_dp 2000 --val_sample_num $V --approximate nystrom_lev --nystrom_d $R \
+          --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
+          --out_root $OUT --num_train_removed_list $REM
+      fi
+      if [ -f "$WLD_TXT" ] && [ -f "$WLD_PKL" ]; then
+        echo "  [skip] wrong-label ($WLD_TXT)"
+      else
+        $PY task_wrong_label_detection.py --config ntk_llama --seed $S --dataset_name $D \
+          --num_train_dp 2000 --val_sample_num $V --approximate nystrom_lev --nystrom_d $R \
+          --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --poison_pct 10 --tmc_iter 500 \
+          --out_root $OUT
+      fi
     done
 
   done
