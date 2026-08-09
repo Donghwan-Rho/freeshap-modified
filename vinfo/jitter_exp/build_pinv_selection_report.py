@@ -60,15 +60,28 @@ plt.rcParams["mathtext.fontset"] = "cm"   # 수식($...$)은 Computer Modern 로
 METH = {
     "nystrom": dict(rank="nys", lam="nyslam", eps="nyseps",
                     eps_anchor_default=1e1,  lam_anchor_default=1e-2, kor="Nyström"),
+    "nystrom_pinv": dict(rank="nyspinv", lam="nyslam", eps="nyseps",
+                    eps_anchor_default=1e-8, lam_anchor_default=1e-2, kor="Nyström-pinv"),
+    "nystrom_lev": dict(rank="nyslev", lam="nyslam", eps="nyseps",
+                    eps_anchor_default=1e-8, lam_anchor_default=1e-2, kor="Nyström-lev"),
     "eigen":   dict(rank="eig", lam="eiglam", eps="eigeps",
                     eps_anchor_default=1e-8, lam_anchor_default=1e-2, kor="Eigen"),
 }
+
+# ---- 최종 탐구 범위: 4x4 고정 grid. 모든 히트맵/곡선/sweep 은 이 범위만 표시 ----
+GRID_LAMS = [1e-3, 1e-2, 1e-1, 1.0]
+GRID_EPS  = [1e-8, 1e-6, 1e-4, 1e-2]
+
+def _in_grid(lam, eps):
+    okl = any(abs(lam - g) <= abs(g) * 1e-6 for g in GRID_LAMS)
+    oke = any(abs(eps - g) <= abs(g) * 1e-6 for g in GRID_EPS)
+    return okl and oke
 
 
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--dataset", type=str, required=True)
-    p.add_argument("--methods", type=str, nargs="+", default=["nystrom", "eigen"])
+    p.add_argument("--methods", type=str, nargs="+", default=["nystrom", "nystrom_pinv"])
     p.add_argument("--model", type=str, default="bert")
     p.add_argument("--seeds", type=int, nargs="+", default=[2024, 2025, 2026])
     p.add_argument("--num_train", type=int, default=2000)
@@ -85,6 +98,8 @@ def parse_args():
     p.add_argument("--sel_ks", type=int, nargs="+", default=[30, 70])
     p.add_argument("--sweep_ks", type=int, nargs="+", default=[20, 50, 70])
     p.add_argument("--res_root", type=str, default="./jitter_exp/res")
+    p.add_argument("--pinv_root", type=str, default="./jitter_exp/nys_pinv_res",
+                   help="root for nystrom_pinv results (separate out_root)")
     p.add_argument("--inv_root", type=str, default="./freeshap_res")
     p.add_argument("--out", type=str, default=None)
     return p.parse_args()
@@ -98,19 +113,27 @@ def _lam_tag(v):
 def _rank_tag(v):
     return f"{float(v)}"
 
+def root_for(a, method):
+    """method 별 결과 out_root: pinv/lev 는 각자 폴더, 그 외는 res_root."""
+    if method == "nystrom_pinv":
+        return a.pinv_root
+    if method == "nystrom_lev":
+        return getattr(a, "lev_root", "./jitter_exp/nys_lev_res")
+    return a.res_root
+
 def sv_path(a, method, lam, eps, seed):
     m = METH[method]
     fn = (f"{a.model}_seed{seed}_num{a.num_train}_val{a.val}"
           f"_{m['rank']}{_rank_tag(a.rank)}_{m['lam']}{_lam_tag(lam)}_{m['eps']}{_fmt_eps(eps)}"
           f"_invlam{a.invlam}_cholesky_float32_signFalse_earlystopTrue_tmc{a.tmc}.pkl")
-    return os.path.join(a.res_root, "shapley", a.dataset, method, fn)
+    return os.path.join(root_for(a, method), "shapley", a.dataset, method, fn)
 
 def pred_path(a, method, lam, eps, seed):
     m = METH[method]
     fn = (f"{a.model}_seed{seed}_num{a.num_train}_val{a.val}"
           f"_{m['rank']}{_rank_tag(a.rank)}_{m['lam']}{_lam_tag(lam)}_{m['eps']}{_fmt_eps(eps)}"
           f"_invlam{a.invlam}_cholesky_float32_signFalse_earlystopTrue_tmc{a.tmc}_predictions.txt")
-    return os.path.join(a.res_root, "data_selection", a.dataset, method, "predictions", fn)
+    return os.path.join(root_for(a, method), "data_selection", a.dataset, method, "predictions", fn)
 
 def inv_sv_path(a, seed):
     fn = (f"{a.model}_seed{seed}_num{a.num_train}_val{a.val}"
@@ -120,7 +143,7 @@ def inv_sv_path(a, seed):
 
 def autodetect_val(a, method):
     for s in a.seeds:
-        for p in glob.glob(os.path.join(a.res_root, "shapley", a.dataset, method, f"*_seed{s}_*.pkl")):
+        for p in glob.glob(os.path.join(root_for(a, method), "shapley", a.dataset, method, f"*_seed{s}_*.pkl")):
             m = re.search(r"_val(\d+)_", os.path.basename(p))
             if m:
                 return int(m.group(1))
@@ -129,7 +152,7 @@ def autodetect_val(a, method):
 def scan_sweeps(a, method):
     """(lam, eps) 조합 — 여러 seed 중 하나라도 있으면 포함."""
     m = METH[method]; combos = set()
-    for p in glob.glob(os.path.join(a.res_root, "shapley", a.dataset, method, "*.pkl")):
+    for p in glob.glob(os.path.join(root_for(a, method), "shapley", a.dataset, method, "*.pkl")):
         fn = os.path.basename(p)
         mr = re.search(rf"_{m['rank']}([0-9.]+)_", fn)
         ml = re.search(rf"_{m['lam']}([0-9.e+-]+)_", fn)
@@ -139,7 +162,7 @@ def scan_sweeps(a, method):
         if int(ms.group(1)) not in a.seeds: continue
         if abs(float(mr.group(1)) - float(a.rank)) > 1e-9: continue
         combos.add((float(ml.group(1)), float(me.group(1))))
-    return combos
+    return {(l, e) for (l, e) in combos if _in_grid(l, e)}   # 4x4 고정 grid 만
 
 
 # ============ 데이터 로드 ============
@@ -318,8 +341,10 @@ def cross_matrices(a, method, cross, val_fn):
 
 # ============ 플롯 헬퍼 ============
 def draw_heat(ax, Mm, Ms, xlabels, ylabels, title, cmap, vmin, vmax,
-              anchor_ij=None, xlab="jitter ε", ylab="ridge λ", fmt="{:.2f}", sfmt="{:.2f}"):
+              anchor_ij=None, xlab="jitter ε", ylab="ridge λ", fmt="{:.2f}", sfmt="{:.2f}",
+              fs_scale=1.0):
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax); cm = plt.get_cmap(cmap)
+    k = float(fs_scale)   # 글씨 배율 (기본 1.0 = 기존 리포트 동작 불변)
     nr, nc = Mm.shape
     for i in range(nr):
         for j in range(nc):
@@ -328,14 +353,14 @@ def draw_heat(ax, Mm, Ms, xlabels, ylabels, title, cmap, vmin, vmax,
             ax.add_patch(plt.Rectangle((j - .5, i - .5), 1, 1, facecolor=fc, edgecolor="white", lw=.4))
             if not np.isnan(v):
                 tc = "white" if norm(v) < .45 else "black"
-                ax.text(j, i + .14, fmt.format(v), ha="center", va="center", fontsize=6.5, color=tc)
+                ax.text(j, i + .14, fmt.format(v), ha="center", va="center", fontsize=6.5 * k, color=tc)
                 if Ms is not None and not np.isnan(Ms[i, j]):
-                    ax.text(j, i - .24, "±" + sfmt.format(Ms[i, j]), ha="center", va="center", fontsize=4.5, color=tc)
+                    ax.text(j, i - .24, "±" + sfmt.format(Ms[i, j]), ha="center", va="center", fontsize=4.5 * k, color=tc)
     ax.set_xlim(-.5, nc - .5); ax.set_ylim(-.5, nr - .5)
-    ax.set_xticks(range(nc)); ax.set_xticklabels(xlabels, rotation=90, fontsize=7)
-    ax.set_yticks(range(nr)); ax.set_yticklabels(ylabels, fontsize=8)
-    ax.set_xlabel(xlab, fontsize=9); ax.set_ylabel(ylab, fontsize=9)
-    ax.set_title(title, fontsize=11, fontweight="bold", pad=6); ax.set_aspect("auto")
+    ax.set_xticks(range(nc)); ax.set_xticklabels(xlabels, rotation=90 if k == 1.0 else 0, fontsize=7 * k)
+    ax.set_yticks(range(nr)); ax.set_yticklabels(ylabels, fontsize=8 * k)
+    ax.set_xlabel(xlab, fontsize=9 * k); ax.set_ylabel(ylab, fontsize=9 * k)
+    ax.set_title(title, fontsize=11 * min(k, 1.25), fontweight="bold", pad=6); ax.set_aspect("auto")
     if anchor_ij is not None and anchor_ij[0] is not None and anchor_ij[1] is not None:
         ai, aj = anchor_ij
         ax.add_patch(plt.Rectangle((aj - .5, ai - .5), 1, 1, fill=False, edgecolor="red", lw=2, zorder=5))
@@ -416,7 +441,7 @@ def page_selection_curves(pdf, a, axis="eps"):
     axsym = "ε" if axis == "eps" else "λ"
     fig.suptitle(f"[{a.dataset}] Selection 곡선 — top-k%(1~100), 모든 {axsym} sweep 오버레이 "
                  f"(INV-mode acc, seed 평균)", fontsize=13, fontweight="bold")
-    for ax, method in zip(axes, ["nystrom", "eigen"]):
+    for ax, method in zip(axes, a.methods):
         m = METH[method]; cross = build_cross(a, method)
         if cross is None:
             ax.set_title(m["kor"]); ax.text(.5, .5, "데이터 없음", ha="center", va="center",
@@ -452,7 +477,7 @@ def page_selection_sweep(pdf, a):
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
     fig.suptitle(f"[{a.dataset}] Selection sweep — acc vs ε (top-k%, k={a.sweep_ks}), mean±std band",
                  fontsize=13, fontweight="bold")
-    for ax, method in zip(axes, ["nystrom", "eigen"]):
+    for ax, method in zip(axes, a.methods):
         m = METH[method]; cross = build_cross(a, method)
         ax.set_title(f"{m['kor']} — {m['eps']} sweep (λ={_fmt_eps(cross['lam0']) if cross else '?'})", fontsize=11)
         ax.set_xlabel(f"{m['eps']} (ε)", fontsize=10); ax.set_ylabel("val acc", fontsize=10)
@@ -481,7 +506,7 @@ def page_coupling(pdf, a, INV, axis):
     fid_metrics = [("sp", "Spearman ρ"), ("pe", "Pearson r"),
                    ("ov", f"top-{a.overlap_pct}% overlap")]
     acc_modes   = [("auc", "acc AUC (전 k 평균)"), ("k30", f"acc (k≤{a.acc_k30}% 평균)")]
-    mcol = {"nystrom": "#1f77b4", "eigen": "#d62728"}
+    mcol = {"nystrom": "#1f77b4", "nystrom_pinv": "#d62728", "eigen": "#2ca02c"}
     fig, axes = plt.subplots(3, 2, figsize=(14, 16.8))
     fig.suptitle(f"[{a.dataset}] Fidelity–Acc coupling — {axsym} sweep only  ({fixed}, mean±std, seeds={a.seeds})",
                  fontsize=13, fontweight="bold", y=0.985)
@@ -501,7 +526,7 @@ def page_coupling(pdf, a, INV, axis):
             ax.set_xlabel(fl, fontsize=9); ax.set_ylabel(al, fontsize=9)
             ax.grid(True, alpha=.3)
             corr_txt = []
-            for method in ["nystrom", "eigen"]:
+            for method in a.methods:
                 cross = build_cross(a, method)
                 if cross is None: continue
                 col = mcol[method]; dy = 4 if method == "eigen" else -8
@@ -555,6 +580,93 @@ def page_selection_cross(pdf, a, method):
     pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
 
 
+
+# ============ 상대오차 히트맵 (16칸 고정 grid) ============
+RELERR_LAMS = GRID_LAMS
+RELERR_EPS  = GRID_EPS
+
+def kp_npz_path(a, method, lam, eps, seed):
+    """kernel_prediction npz 경로 (compute_kernel_pred_error.py 가 생성)."""
+    if method == "inv":
+        stem = os.path.basename(inv_sv_path(a, seed)).replace(".pkl", "")
+        return os.path.join(a.inv_root, "kernel_prediction", a.dataset, "inv",
+                            "predictions", stem + "_predictions.npz")
+    p = pred_path(a, method, lam, eps, seed)
+    return p.replace("/data_selection/", "/kernel_prediction/").replace("_predictions.txt", "_predictions.npz")
+
+_KP_CACHE = {}
+def _load_logits(path):
+    if path in _KP_CACHE: return _KP_CACHE[path]
+    out = None
+    if os.path.exists(path):
+        try: out = np.load(path)["logits"]
+        except Exception: out = None
+    _KP_CACHE[path] = out; return out
+
+def kpred_err_seeds(a, method, lam, eps):
+    """||K(D)-K_a(D)||_F / ||K(D)||_F  (D=val set 예측 logits), seed별 → (mean,std,n)."""
+    vals = []
+    for s in a.seeds:
+        inv = _load_logits(kp_npz_path(a, "inv", None, None, s))
+        ap  = _load_logits(kp_npz_path(a, method, lam, eps, s))
+        if inv is None or ap is None or inv.shape != ap.shape: continue
+        den = float(np.linalg.norm(inv))
+        if den == 0: continue
+        vals.append(float(np.linalg.norm(ap - inv) / den))
+    return _mean_std_n(vals)
+
+def sv_relerr_seeds(a, method, lam, eps, INV):
+    """||sv_a - sv_inv||_2 / ||sv_inv||_2 — i번째 포인트끼리 직접 (sampled_idx 동일 확인,
+    다르면 index-align 폴백; value 정렬은 하지 않음)."""
+    vals = []
+    for s in a.seeds:
+        asv, asi = load_sv(sv_path(a, method, lam, eps, s))
+        isv, isi = INV.get(s, (None, None))
+        if asv is None or isv is None: continue
+        if len(asv) == len(isv) and np.array_equal(asi, isi):
+            av, bv = asv, isv                      # 같은 순서 → 직접
+        else:
+            av, bv = align(asv, asi, isv, isi)     # 폴백: 원본 인덱스로 매칭
+        if len(av) < 10: continue
+        den = float(np.linalg.norm(bv))
+        if den == 0: continue
+        vals.append(float(np.linalg.norm(av - bv) / den))
+    return _mean_std_n(vals)
+
+def _relerr_grid(a, val_fn):
+    Mm = np.full((len(RELERR_LAMS), len(RELERR_EPS)), np.nan); Ms = np.full_like(Mm, np.nan)
+    for i, l in enumerate(RELERR_LAMS):
+        for j, e in enumerate(RELERR_EPS):
+            mm, ss, _ = val_fn(l, e); Mm[i, j] = mm; Ms[i, j] = ss
+    return Mm, Ms
+
+def page_relerr(pdf, a, INV, kind):
+    """kind='kpred' → 커널 val-예측 상대오차 / 'sv' → Shapley value 상대오차."""
+    xl = [_fmt_eps(e) for e in RELERR_EPS]; yl = [_fmt_eps(l) for l in RELERR_LAMS]
+    if kind == "kpred":
+        ttl = ("Kernel val-prediction 상대오차  ||K(D)-K_a(D)||_F / ||K(D)||_F   "
+               "(K=full eNTK inv(λ=1e-6), D=val set, train 2000 전체로 학습)")
+        fns = {m: (lambda l, e, _m=m: kpred_err_seeds(a, _m, l, e)) for m in a.methods}
+    else:
+        ttl = ("Shapley value 상대오차  ||sv_a - sv_inv||_2 / ||sv_inv||_2   "
+               "(길이 2000 SV 벡터, i번째 포인트끼리 직접 비교)")
+        fns = {m: (lambda l, e, _m=m: sv_relerr_seeds(a, _m, l, e, INV)) for m in a.methods}
+    n = len(a.methods)
+    fig, axes = plt.subplots(1, n, figsize=(7.2 * n, 5.8), squeeze=False)
+    fig.suptitle(f"[{a.dataset}] {ttl}\n16칸 고정 grid (λ×ε), mean±std, seeds={a.seeds} — 낮을수록 inv에 가까움",
+                 fontsize=11.5, fontweight="bold")
+    for ax, method in zip(axes[0], a.methods):
+        m = METH[method]
+        Mm, Ms = _relerr_grid(a, fns[method])
+        fin = Mm[np.isfinite(Mm)]
+        vmx = min(1.0, float(fin.max())) if fin.size else 1.0
+        draw_heat(ax, Mm, Ms, xl, yl, f"{m['kor']}  (색 상한 {vmx:g}; 숫자=실제값)", "RdYlGn_r",
+                  0.0, vmx, None, xlab=f"{m['eps']} (ε)", ylab=f"{m['lam']} (λ)",
+                  fmt="{:.3f}", sfmt="{:.3f}")
+    fig.tight_layout(rect=[0, 0, 1, .86])
+    pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
+
+
 # ============ main ============
 # ============ 페이지: best-config 비교 (random/inv vs method별 최적 sweep) ============
 def _sel_auc(a, method, lam, eps, cap):
@@ -590,7 +702,7 @@ def page_best_compare(pdf, a):
     fig, axes = plt.subplots(1, 2, figsize=(15, 5.6), gridspec_kw={"wspace": .28})
     fig.suptitle(f"[{a.dataset}] Selection best-config — random/inv vs 각 method 최적 sweep "
                  f"(acc AUC 높을수록 좋음), seeds={a.seeds}", fontsize=12.5, fontweight="bold")
-    mcol = {"eigen": "#1f77b4", "nystrom": "#d62728"}
+    mcol = {"nystrom": "#1f77b4", "nystrom_pinv": "#d62728", "eigen": "#2ca02c"}
     for ax, cap, ttl in [(axes[0], None, "AUC 전체 (top 1~100%)"),
                          (axes[1], K, f"AUC 저-k (top 1~{K}%)")]:
         Lx = 100 if cap is None else K
@@ -619,9 +731,10 @@ def main():
     if a.val is None:
         print("[error] val 자동 감지 실패 — --val 지정 필요"); return
     if a.out is None:
-        a.out = f"./jitter_exp/report_selection_{a.dataset}_n{a.num_train}_tmc{a.tmc}.pdf"
+        a.out = f"./jitter_exp/report_pinv_selection_{a.dataset}_n{a.num_train}_tmc{a.tmc}.pdf"
 
     print(f"[cfg] dataset={a.dataset} seeds={a.seeds} n={a.num_train} val={a.val} tmc={a.tmc} rank={a.rank}")
+
     INV = {s: load_sv(inv_sv_path(a, s)) for s in a.seeds}
     got = [s for s in a.seeds if INV[s][0] is not None]
     print(f"[inv] 존재 seed: {got}")

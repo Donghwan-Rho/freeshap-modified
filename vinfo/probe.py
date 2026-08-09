@@ -193,7 +193,8 @@ from entks.ntk import compute_ntk, init_torch, process_args, slice_data
 from entks.nlpmodels import SentenceClassifier, PromptSentenceClassifier, PromptLLM
 from entks.ntk_regression import (NTKRegression, NTKRegression_correction_multiclass,
                                   fastNTKRegression, shapleyNTKRegression, EigenNTKRegression,
-                                  NystromNTKRegression)
+                                  NystromNTKRegression, NystromPinvNTKRegression,
+                                  NystromLevNTKRegression)
 from easydict import EasyDict as edict
 import pprint
 
@@ -267,6 +268,8 @@ class NTKProbe(Probe):
         self.nystrom_dtype = torch.float64
         self.nystrom_landmark_seed = 1234
         self.nystrom_jitter = 1e-8
+        self.nystrom_use_pinv = False   # True -> NystromPinvNTKRegression (pseudoinverse variant)
+        self.nystrom_use_lev = False    # True -> NystromLevNTKRegression (leverage-score landmarks)
         self.nystrom_regression = None
         self.nystrom_regression_dict = {}  # keyed by landmark_seed
 
@@ -434,8 +437,14 @@ class NTKProbe(Probe):
 
         key = int(self.nystrom_landmark_seed)
         if key not in self.nystrom_regression_dict:
-            print(f"[NTKProbe] Initializing NystromNTKRegression (landmark_seed={key})...")
-            self.nystrom_regression_dict[key] = NystromNTKRegression(
+            if getattr(self, "nystrom_use_lev", False):
+                cls = NystromLevNTKRegression
+            elif self.nystrom_use_pinv:
+                cls = NystromPinvNTKRegression
+            else:
+                cls = NystromNTKRegression
+            print(f"[NTKProbe] Initializing {cls.__name__} (landmark_seed={key})...")
+            self.nystrom_regression_dict[key] = cls(
                 ntk_full=self.ntk,
                 y_train=self.train_labels,
                 n_class=self.num_labels,
@@ -447,7 +456,7 @@ class NTKProbe(Probe):
                 landmark_seed=key,
                 jitter=self.nystrom_jitter,
             )
-            print(f"[NTKProbe] NystromNTKRegression ready (landmark_seed={key}).")
+            print(f"[NTKProbe] {cls.__name__} ready (landmark_seed={key}).")
         self.nystrom_regression = self.nystrom_regression_dict[key]
 
     def get_correction(self, full_train_set, full_test_set):

@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
     parser.add_argument("--approximate", type=str, default="inv",
-                        choices=["inv", "eigen", "nystrom", "none"])
+                        choices=["inv", "eigen", "nystrom", "nystrom_pinv", "nystrom_lev", "none"])
     parser.add_argument("--eigen_rank", type=float, default=30,
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10%% of data)")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
@@ -94,6 +94,12 @@ def main():
     tmc_iter = args.tmc_iter
 
     approximate = args.approximate
+    # nystrom_pinv (pseudoinverse-Nystrom): alias to "nystrom" for all param/tag/path logic;
+    # only the regression CLASS (probe_model.nystrom_use_pinv) and method_dir differ.
+    _is_pinv = (approximate == "nystrom_pinv")
+    _is_lev = (approximate == "nystrom_lev")   # leverage-score landmarks (pinv construction)
+    if _is_pinv or _is_lev:
+        approximate = "nystrom"
     remove_pct_list = args.num_train_removed_list
     eigen_rank_pct = args.eigen_rank
     inv_lambda_ = args.inv_lambda_
@@ -133,6 +139,8 @@ def main():
 
     if approximate != "none":
         probe_model.approximate(approximate)
+    probe_model.nystrom_use_pinv = _is_pinv   # pinv -> pseudoinverse-Nystrom class
+    probe_model.nystrom_use_lev = _is_lev    # lev -> leverage-score Nystrom class
 
     if approximate == "eigen":
         probe_model.set_eigen_params(
@@ -177,7 +185,7 @@ def main():
         del ntk_peek
 
     # ===== 1) Shapley pkl 경로 (selection 과 동일한 파일 재사용) =====
-    method_dir = approximate
+    method_dir = "nystrom_lev" if _is_lev else ("nystrom_pinv" if _is_pinv else approximate)  # separate folder for pinv
     if approximate == "eigen":
         eigen_lam_str = f"{eigen_lambda_:.0e}"
         inv_lam_str = f"{inv_lambda_:.0e}"
@@ -187,6 +195,10 @@ def main():
         inv_lam_str = f"{inv_lambda_:.0e}"
         extra_tag = (f"_nys{nystrom_d_pct}_nyslam{nys_lam_str}_nyseps{nyseps_str}"
                      f"_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}")
+        if _is_pinv:
+            extra_tag = extra_tag.replace("_nys", "_nyspinv", 1)
+        elif _is_lev:
+            extra_tag = extra_tag.replace("_nys", "_nyslev", 1)  # filename marker: pseudoinverse variant
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"

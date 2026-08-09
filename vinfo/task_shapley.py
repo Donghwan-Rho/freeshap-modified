@@ -71,7 +71,7 @@ def parse_args():
     parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
     parser.add_argument("--approximate", type=str, default="inv",
-                        choices=["inv", "eigen", "nystrom", "none"])
+                        choices=["inv", "eigen", "nystrom", "nystrom_pinv", "nystrom_lev", "none"])
     parser.add_argument("--eigen_rank", type=float, default=30,
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10% of data)")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
@@ -129,6 +129,14 @@ def main():
     tmc_iter = args.tmc_iter
 
     approximate = args.approximate
+    # --- nystrom_pinv (pseudoinverse-Nystrom): reuse ALL nystrom param/tag/path logic by
+    #     aliasing to "nystrom" here. The only differences: the regression CLASS (selected
+    #     via probe_model.nystrom_use_pinv below) and method_dir (kept "nystrom_pinv" so
+    #     outputs land in a separate folder). Existing modes are untouched.
+    _is_pinv = (approximate == "nystrom_pinv")
+    _is_lev = (approximate == "nystrom_lev")   # leverage-score landmarks (pinv construction)
+    if _is_pinv or _is_lev:
+        approximate = "nystrom"
     eigen_rank_pct = args.eigen_rank  # Now interpreted as percentage of num_dp
     inv_lambda_ = args.inv_lambda_
     eigen_lambda_ = args.eigen_lambda_
@@ -186,6 +194,8 @@ def main():
 
     if approximate != "none":
         probe_model.approximate(approximate)
+    probe_model.nystrom_use_pinv = _is_pinv   # pinv -> pseudoinverse-Nystrom class in prepare_nystrom_regression
+    probe_model.nystrom_use_lev = _is_lev    # lev -> leverage-score Nystrom class
 
     # # 정책: ntk_normalize는 모든 approximate에 적용
     # if hasattr(probe_model, "normalize_ntk"):
@@ -305,7 +315,7 @@ def main():
     print("len(val_set)   =", len(val_set))
 
     # ===== 3) Shapley 결과 경로 =====
-    method_dir = approximate  # 'inv' or 'eigen'
+    method_dir = "nystrom_lev" if _is_lev else ("nystrom_pinv" if _is_pinv else approximate)  # separate folder for pinv
     
     # Format lambda in scientific notation for filename (always use 1e-X format)
     if approximate == "eigen":
@@ -320,6 +330,10 @@ def main():
             f"_nys{nystrom_d_pct}"
             f"_nyslam{nys_lam_str}_nyseps{nyseps_str}_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}"
         )
+        if _is_pinv:
+            extra_tag = extra_tag.replace("_nys", "_nyspinv", 1)
+        elif _is_lev:
+            extra_tag = extra_tag.replace("_nys", "_nyslev", 1)  # filename marker: pseudoinverse variant
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"

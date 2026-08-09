@@ -486,6 +486,119 @@ class NystromNTKRegression(EigenNTKRegression):
         return phi_tr, phi_te
 
 
+class NystromPinvNTKRegression(NystromNTKRegression):
+    """Pseudoinverse-Nystrom variant (friend's proposal).
+
+    Instead of the parent's  Phi = C @ chol(W + jitter*I)^{-T}, build the Nystrom
+    features from the eigendecomposition of the landmark matrix W and its
+    Moore-Penrose pseudoinverse on the POSITIVE spectrum:
+
+        W = Q Σ Qᵀ  (eigh),   keep λ_i > jitter,
+        Phi_tr = C_tr Q_s Σ_s^{-1/2},   Phi_te = C_te Q_s Σ_s^{-1/2}
+        =>  Phi_tr Phi_trᵀ = C_tr W† C_trᵀ   (jitter-free standard Nystrom, ε->0 limit).
+
+    `jitter` (nyseps) is reused as a POSITIVE eigenvalue cutoff for numerical safety:
+    eigenvalues <= jitter (roundoff-negative / negligible) are dropped so 1/√λ never
+    explodes. With the default 1e-8 and a well-conditioned W this drops nothing (=
+    pure pseudoinverse); on an ill-conditioned W it truncates the noise directions.
+    forward / ridge-solve / incremental update are inherited unchanged (they only
+    consume phi_tr/phi_te, whose feature dim may now be < d after truncation).
+    """
+
+    def _precompute_eigen_features(self, ntk_full):
+        print("[NystromPinvNTKRegression] Computing pseudoinverse-Nystrom features (eigh(W))...")
+        t0 = time.time()
+
+        if ntk_full.ndim == 3:
+            ntk0 = ntk_full[0].detach()
+        else:
+            ntk0 = ntk_full.detach()
+        ntk0 = ntk0.to("cpu", dtype=torch.float64)
+        n_total, n_train = ntk0.shape
+
+        K_trtr = ntk0[:n_train, :].numpy()
+        K_tetr = ntk0[n_train:, :].numpy()
+        K_sym = 0.5 * (K_trtr + K_trtr.T)
+
+        d = int(min(self.rank, n_train))
+        S_land = self._select_landmarks(K_sym, n_train, d)
+
+        W = K_sym[np.ix_(S_land, S_land)]   # (d, d)
+        C_tr = K_sym[:, S_land]             # (n_train, d)
+        C_te = K_tetr[:, S_land]            # (n_test, d)
+
+        # Eigendecomposition of W + pseudoinverse on the positive spectrum.
+        evals, evecs = np.linalg.eigh(W)                 # ascending, symmetric
+        floor = float(self._nystrom_jitter)              # nyseps as positive cutoff
+        keep = evals > floor
+        n_drop = int((~keep).sum())
+        Q_s = evecs[:, keep]
+        Sig_s = evals[keep]
+        inv_sqrt = 1.0 / np.sqrt(Sig_s)
+        # Phi = C @ Q_s @ diag(Sigma_s^{-1/2})
+        Phi_tr = C_tr @ (Q_s * inv_sqrt[None, :])   # (n_train, d_keep)
+        Phi_te = C_te @ (Q_s * inv_sqrt[None, :])   # (n_test, d_keep)
+
+        decomp_time = time.time() - t0
+        self.eigen_decomposition_time = decomp_time
+        smin = float(Sig_s.min()) if Sig_s.size else float("nan")
+        print(f"[{type(self).__name__}] Done (n_train={n_train}, d={d}, "
+              f"kept={int(keep.sum())}/{d}, dropped(<= {floor:.1e})={n_drop}, "
+              f"min_kept_eig={smin:.3e}, landmark_seed={self._landmark_seed}) in {decomp_time:.4f}s")
+
+        phi_tr = torch.from_numpy(Phi_tr).to(device=self.device, dtype=self.dtype)
+        phi_te = torch.from_numpy(Phi_te).to(device=self.device, dtype=self.dtype)
+        return phi_tr, phi_te
+
+    def _select_landmarks(self, K_sym, n_train, d):
+        """Uniform random landmarks (fixed seed). Subclasses may override
+        to change the sampling distribution; everything downstream (W eigh,
+        pseudoinverse features) is shared."""
+        rng = np.random.RandomState(self._landmark_seed)
+        return np.sort(rng.choice(n_train, size=d, replace=False))
+
+
+class NystromLevNTKRegression(NystromPinvNTKRegression):
+    """Leverage-score Nystrom variant (pseudoinverse construction inherited).
+
+    Identical to NystromPinvNTKRegression except that the d landmarks are
+    sampled WITHOUT replacement with probability proportional to the ridge
+    leverage scores of the training kernel,
+
+        l_i(lam_bar) = [K (K + lam_bar I)^{-1}]_ii,   lam_bar = self.lam * n_train,
+
+    (the K + rho*|S|*I convention used elsewhere in this codebase, at S = N).
+    Computed exactly via eigh(K_sym): l_i = sum_j (s_j/(s_j+lam_bar)) Q_ij^2.
+
+    Notes:
+      * Practical unweighted without-replacement proportional sampling; RLS
+        theory variants (with replacement + 1/sqrt(m p_i) reweighting) exist
+        but are not needed for this probe.
+      * Exact leverage computation costs a full n x n eigh — the very O(n^3)
+        setup Nystrom is meant to avoid. The printed timing quantifies this
+        (relevant to the compute discussion in the paper).
+      * Same _landmark_seed drives the sampling -> reproducible per seed.
+    """
+
+    def _select_landmarks(self, K_sym, n_train, d):
+        t0 = time.time()
+        lam_bar = float(self.lam) * n_train
+        evals, evecs = np.linalg.eigh(K_sym)          # ascending
+        w = evals / (evals + lam_bar)                 # spectral filter s/(s+lam_bar)
+        w = np.clip(w, 0.0, None)                     # roundoff-negative eigenvalues
+        lev = (evecs ** 2) @ w                        # l_i = sum_j w_j Q_ij^2
+        lev = np.clip(lev, 1e-12, None)
+        p = lev / lev.sum()
+        rng = np.random.RandomState(self._landmark_seed)
+        S_land = np.sort(rng.choice(n_train, size=d, replace=False, p=p))
+        lev_time = time.time() - t0
+        self.leverage_computation_time = lev_time
+        print(f"[NystromLevNTKRegression] ridge-leverage landmarks "
+              f"(lam_bar={lam_bar:.3e}, d_eff={lev.sum():.1f}, "
+              f"lev min/max={lev.min():.3e}/{lev.max():.3e}) in {lev_time:.4f}s")
+        return S_land
+
+
 ################################### Kernel regression with Dynamic Programming INVerse ################################
 class shapleyNTKRegression(nn.Module):
     def __init__(self, k_train, y, n_class, pre_inv=None, reg=1e-6):
