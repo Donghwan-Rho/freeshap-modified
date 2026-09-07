@@ -194,7 +194,7 @@ from entks.nlpmodels import SentenceClassifier, PromptSentenceClassifier, Prompt
 from entks.ntk_regression import (NTKRegression, NTKRegression_correction_multiclass,
                                   fastNTKRegression, shapleyNTKRegression, EigenNTKRegression,
                                   NystromNTKRegression, NystromPinvNTKRegression,
-                                  NystromLevNTKRegression)
+                                  NystromLevNTKRegression, NystromSVLandmarkNTKRegression)
 from easydict import EasyDict as edict
 import pprint
 
@@ -270,6 +270,9 @@ class NTKProbe(Probe):
         self.nystrom_jitter = 1e-8
         self.nystrom_use_pinv = False   # True -> NystromPinvNTKRegression (pseudoinverse variant)
         self.nystrom_use_lev = False    # True -> NystromLevNTKRegression (leverage-score landmarks)
+        # SV 기반 결정적 landmark (oracle diagnostic). 'uniform' 이면 기존 동작 그대로.
+        self.nystrom_landmark_mode = "uniform"   # uniform | top | q3 | median | q1 | bottom
+        self.nystrom_landmark_sv = None           # top/bottom 일 때 inv Shapley value (len = n_train)
         self.nystrom_regression = None
         self.nystrom_regression_dict = {}  # keyed by landmark_seed
 
@@ -437,7 +440,12 @@ class NTKProbe(Probe):
 
         key = int(self.nystrom_landmark_seed)
         if key not in self.nystrom_regression_dict:
-            if getattr(self, "nystrom_use_lev", False):
+            _lm_mode = getattr(self, "nystrom_landmark_mode", "uniform")
+            _extra_kw = {}
+            if _lm_mode in ("q4", "q0", "q2", "q1", "q3"):   # SV 기반 결정적 landmark (pinv 구성)
+                cls = NystromSVLandmarkNTKRegression
+                _extra_kw = dict(landmark_sv=self.nystrom_landmark_sv, landmark_mode=_lm_mode)
+            elif getattr(self, "nystrom_use_lev", False):
                 cls = NystromLevNTKRegression
             elif self.nystrom_use_pinv:
                 cls = NystromPinvNTKRegression
@@ -455,6 +463,7 @@ class NTKProbe(Probe):
                 device=self.device,
                 landmark_seed=key,
                 jitter=self.nystrom_jitter,
+                **_extra_kw,
             )
             print(f"[NTKProbe] {cls.__name__} ready (landmark_seed={key}).")
         self.nystrom_regression = self.nystrom_regression_dict[key]
@@ -573,10 +582,10 @@ class NTKProbe(Probe):
         test_acc = (test_preds.argmax(dim=1) == test_labels).float().mean()
         test_loss = F.cross_entropy(test_preds, test_labels, reduction='mean').item()
         # sanity check
-        if test_loss > 1:
-            print("bad kernel regression")
-            print(
-                f"train loss:, {F.cross_entropy(kr_model(k_train), y_train, reduction='mean').item()}, test loss: {test_loss}, test acc: {test_acc}")
+        # if test_loss > 1:
+        #     print("bad kernel regression")
+        #     print(
+        #         f"train loss:, {F.cross_entropy(kr_model(k_train), y_train, reduction='mean').item()}, test loss: {test_loss}, test acc: {test_acc}")
         return test_loss, test_acc
 
     def kernel_regression_idx(self, train_indices, test_set, has_pre_inv=False):

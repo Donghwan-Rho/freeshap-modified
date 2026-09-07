@@ -12,6 +12,8 @@
       (커널/예측 오차 npz 는 없으면 자동 계산; lev 포함)
   p5: per-point max SV 오차 vs 이론 상한 (lrfshap Prop 0.2 / Cor 0.1) — 같은 단위 직접 비교.
       점선 = Eigen bound(Eckart–Young), uniform-Nyström bound(δ=0.1). ρ=λ_fix 해석.
+  p6: rank별 SV 점별 오차 분포 (2×4) — d=sv_approx−sv_inv 히스토그램, inv=검정 점선(x=0),
+      seed pooling, 클리핑 한계는 |오차| 99% 분위수 자동.
 
 데이터 탐색: 각 method 파일을 모든 root(nys_lev_res / nys_pinv_res / jitter res /
 freeshap_res)에서 fallback 탐색 → eigen rank-sweep(freeshap_res)도 자동으로 찾음.
@@ -164,7 +166,8 @@ def kp_npz(a, m, r, seed):
 def ensure_npz(a):
     """npz 없으면 compute(예측+kernel_relerr), 필드만 없으면 backfill (lev 포함)."""
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "compute_kernel_pred_error.py")
-    common = ["--dataset", a.dataset, "--ranks", *[f"{r:g}" for r in a.ranks],
+    common = ["--dataset", a.dataset, "--model", a.model,
+              "--ranks", *[f"{r:g}" for r in a.ranks],
               "--lams", str(a.lam_fix), "--epss", str(a.eps_fix),
               "--methods", *a.methods]
     def _paths(s):
@@ -173,6 +176,10 @@ def ensure_npz(a):
             for r in a.ranks:
                 yield kp_npz(a, m, r, s)
     missing = [s for s in a.seeds if any(not os.path.exists(p) for p in _paths(s))]
+    if missing and a.model == "llama":   # llama 모델 로드(대용량) 유발 방지 — llama 서버에서 수동 실행
+        print(f"[auto] kernel_prediction npz 미비 seed {missing} (llama 는 자동 계산 안 함 — "
+              "llama 서버에서 compute_kernel_pred_error.py --model llama 실행)")
+        missing = []
     if missing:
         print(f"[auto] kernel_prediction npz 미비 seed {missing} -> compute 실행...")
         rr = subprocess.run([sys.executable, script, *common, "--seeds", *map(str, missing)])
@@ -464,6 +471,171 @@ def page_curves(pdf, a, INV, METRICS):
     pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
 
 
+def page_errdist(pdf, a, INV):
+    """p6: rank별 SV 점별 오차 분포 (2×4) — d = sv_approx − sv_inv 히스토그램.
+    inv 는 오차 0 이므로 검정 점선(x=0)으로 표시. seed 는 존재하는 것 전부 pooling.
+    클리핑 한계 XLIM 은 전체 오차의 99% 분위수로 자동 결정 (칸마다 동일 축)."""
+    fixed = f"λ={_fmt_eps(a.lam_fix)}, ε={_fmt_eps(a.eps_fix)}"
+    # ---- 1) 오차 + 방법별 SV 값 수집: {rank: {method: (pooled diffs, pooled sv)}} ----
+    diffs, used_seeds = {}, set()
+    for r in a.ranks:
+        diffs[r] = {}
+        for m in a.methods:
+            pool_d, pool_sv = [], []
+            for s in a.seeds:
+                asv, asi = load_sv(find3(a, m, r, s, "sv"))
+                isv, isi = INV.get(s, (None, None))
+                if asv is None or isv is None:
+                    continue
+                if len(asv) == len(isv) and np.array_equal(asi, isi):
+                    av, bv = np.asarray(asv, float), np.asarray(isv, float)
+                else:
+                    av, bv = align(asv, asi, isv, isi)
+                    av, bv = np.asarray(av, float), np.asarray(bv, float)
+                if len(av) < 10:
+                    continue
+                pool_d.append(av - bv); pool_sv.append(av); used_seeds.add(s)
+            if pool_d:
+                diffs[r][m] = (np.concatenate(pool_d), np.concatenate(pool_sv))
+    all_d = np.concatenate([d for r in a.ranks for d, _ in diffs[r].values()]) \
+        if any(diffs[r] for r in a.ranks) else np.array([0.0])
+    XLIM = float(np.percentile(np.abs(all_d), 99)) or 1.0
+    bins = np.linspace(-XLIM, XLIM, 61)
+
+    # inv SV 자체의 스케일 (seed pooling) — 오차 크기 해석 기준
+    inv_pool = [np.asarray(INV[s][0], float) for s in a.seeds
+                if INV.get(s, (None,))[0] is not None]
+    inv_stats = None
+    if inv_pool:
+        iv = np.concatenate(inv_pool)
+        inv_stats = (iv.mean(), iv.std(), iv.min(), iv.max())
+
+    # ---- 2) 2×4 그리드 (7 rank + 범례 칸) ----
+    fig, axes = plt.subplots(2, 4, figsize=(15.5, 7.6))
+    for k, r in enumerate(a.ranks):
+        ax = axes[k // 4][k % 4]
+        res = diffs[r]
+        if not res:
+            ax.text(.5, .5, "(no data)", ha="center", va="center",
+                    transform=ax.transAxes, color="gray")
+        clipped = tot = 0
+        # ---- 좌상단 주석: inv SV 스케일 + 방법별 [SV 값 통계 / |err| max·p99] (방법 색) ----
+        y_txt = .97; dy = .058
+        if inv_stats is not None:
+            mu, sd, mn, mx = inv_stats
+            ax.text(.02, y_txt, f"inv sv: μ={mu:.3g} σ={sd:.3g} [{mn:.3g}, {mx:.3g}]",
+                    transform=ax.transAxes, va="top", fontsize=6.0, color="black")
+            y_txt -= dy
+        for m in a.methods:
+            if m not in res:
+                continue
+            d, sv = res[m]; clipped += int((np.abs(d) > XLIM).sum()); tot += d.size
+            ax.hist(np.clip(d, -XLIM, XLIM), bins=bins, histtype="step",
+                    color=M3[m]["col"], lw=1.6, density=True)
+            ad = np.abs(d)
+            ax.text(.02, y_txt,
+                    f"{M3[m]['kor']} sv: μ={sv.mean():.3g} σ={sv.std():.3g} "
+                    f"[{sv.min():.3g}, {sv.max():.3g}]",
+                    transform=ax.transAxes, va="top", fontsize=6.0, color=M3[m]["col"])
+            y_txt -= dy
+            ax.text(.02, y_txt,
+                    f"  |err|: max={ad.max():.3g} p99={np.percentile(ad, 99):.3g}",
+                    transform=ax.transAxes, va="top", fontsize=6.0, color=M3[m]["col"])
+            y_txt -= dy
+        ax.axvline(0, color="black", ls="--", lw=1.3)   # inv (오차 0 기준선)
+        ax.set_title(f"rank {r:g}%", fontsize=11)
+        if tot:
+            ax.text(.02, y_txt, f"{100*clipped/tot:.1f}% |err|>{XLIM:.2g}",
+                    transform=ax.transAxes, va="top", fontsize=6.0, color="dimgray")
+        ax.set_xlabel("error (approx − inv)", fontsize=9)
+        if k % 4 == 0:
+            ax.set_ylabel("density", fontsize=9)
+        ax.tick_params(labelsize=8); ax.grid(True, alpha=.25)
+    # 8번째 칸: 범례
+    axL = axes[1][3]; axL.axis("off")
+    hands = [plt.Line2D([0], [0], color="black", ls="--", lw=1.3)] + \
+            [plt.Line2D([0], [0], color=M3[m]["col"], lw=1.6) for m in a.methods]
+    labs = ["inv (오차 0)"] + [M3[m]["kor"] for m in a.methods]
+    axL.legend(hands, labs, loc="center", fontsize=11, frameon=False)
+    axL.text(.5, .08, f"seeds pooled: {sorted(used_seeds)}", ha="center",
+             transform=axL.transAxes, fontsize=8.5, color="dimgray")
+    fig.suptitle(f"[{a.dataset}] SV 점별 오차 분포 — d = sv_approx − sv_inv "
+                 f"({fixed} 고정, clip ±{XLIM:.2g}, 61 bins, density)", fontsize=12.5)
+    fig.tight_layout(rect=[0, 0, 1, .95])
+    pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
+
+
+def _spike_npzs(a):
+    return sorted(glob.glob(f"./jitter_exp/coalition_spike/{a.model}_{a.dataset}_seed*.npz"))
+
+
+def ensure_spike(a):
+    """coalition_spike npz 없으면 compute 시도 (모델 로드 필요 — 실패 시 빈 페이지)."""
+    if _spike_npzs(a):
+        return
+    if a.model == "llama":   # llama 모델 로드(대용량) 유발 방지 — llama 서버에서 수동 실행
+        print("[auto] coalition_spike npz 없음 (llama 는 자동 계산 안 함 — "
+              "llama 서버에서 compute_coalition_spike.py 실행)")
+        return
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "compute_coalition_spike.py")
+    print("[auto] coalition_spike npz 없음 -> compute 시도 (seed 2024)...")
+    rr = subprocess.run([sys.executable, script, "--dataset", a.dataset, "--model", a.model,
+                         "--seeds", "2024", "--ranks", *[f"{r:g}" for r in a.ranks],
+                         "--lam", str(a.lam_fix), "--eps", str(a.eps_fix)])
+    if rr.returncode != 0:
+        print("[auto] coalition_spike compute 실패 — p7 은 빈 페이지로 진행")
+
+
+def page_spike(pdf, a):
+    """p7: coalition-스파이크 (2×4) — 부분집합 크기 n 별 |acc_approx − acc_inv| (%p).
+    저랭크 근사의 보간 임계(|S|≈d)에서 유틸리티 오염이 피크 — TMC 적분을 통해
+    SV 오차 정체/상승의 원인이 되는 구간을 rank 별로 시각화. npz 는 compute_coalition_spike.py."""
+    files = _spike_npzs(a)
+    fixed = f"λ={_fmt_eps(a.lam_fix)}, ε={_fmt_eps(a.eps_fix)}"
+    fig, axes = plt.subplots(2, 4, figsize=(15.5, 7.6))
+    if not files:
+        for row in axes:
+            for ax in row: ax.axis("off")
+        axes[0][0].text(.5, .5, "(no data — compute_coalition_spike.py 실행 필요;\n"
+                        "llama 는 llama 있는 서버에서)", ha="center", va="center", fontsize=11)
+        fig.suptitle(f"[{a.dataset}] coalition-스파이크 (데이터 없음)", fontsize=12.5)
+        pdf.savefig(fig, bbox_inches="tight"); plt.close(fig); return
+    zs = [dict(np.load(f, allow_pickle=True)) for f in files]
+    seeds_used = [re.search(r"_seed(\d+)\.npz", f).group(1) for f in files]
+    for k, r in enumerate(a.ranks):
+        ax = axes[k // 4][k % 4]
+        d_act = int(a.num_train * r / 100)
+        for m in a.methods:
+            key_s, key_v = f"{m}_r{r:g}_sizes", f"{m}_r{r:g}_vals"
+            zs_ok = [z for z in zs if key_s in z]
+            if not zs_ok:
+                continue
+            sizes = zs_ok[0][key_s]
+            vals = np.mean([z[key_v] for z in zs_ok], axis=0)
+            ax.plot(sizes, vals, marker="o", ms=3.5, lw=1.5,
+                    color=M3[m]["col"], label=M3[m]["kor"])
+        ax.axvline(d_act, color="black", ls=":", lw=1.2)
+        ax.text(d_act, ax.get_ylim()[1] * .97, f" n=d={d_act}", fontsize=7,
+                va="top", color="black")
+        ax.set_title(f"rank {r:g}% (d={d_act})", fontsize=11)
+        ax.set_xlabel("coalition size |S|", fontsize=9)
+        if k % 4 == 0:
+            ax.set_ylabel("|acc_approx − acc_inv| (%p)", fontsize=9)
+        ax.tick_params(labelsize=8); ax.grid(True, alpha=.25)
+    axL = axes[1][3]; axL.axis("off")
+    hands = [plt.Line2D([0], [0], color=M3[m]["col"], marker="o", ms=4, lw=1.5) for m in a.methods] \
+        + [plt.Line2D([0], [0], color="black", ls=":", lw=1.2)]
+    labs = [M3[m]["kor"] for m in a.methods] + ["보간 임계 n=d"]
+    axL.legend(hands, labs, loc="center", fontsize=11, frameon=False)
+    axL.text(.5, .1, f"seeds: {seeds_used} / 랜덤 coalition 평균", ha="center",
+             transform=axL.transAxes, fontsize=8.5, color="dimgray")
+    fig.suptitle(f"[{a.dataset}] coalition-스파이크 — 부분집합 크기별 유틸리티 오염 "
+                 f"|acc_approx(S) − acc_inv(S)| ({fixed} 고정; |S|≈d 에서 피크 = SV 오차 정체/상승 원인)",
+                 fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, .95])
+    pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
+
+
 def main():
     a = parse_args()
     if a.val is None:
@@ -492,6 +664,10 @@ def main():
         page_heat(pdf, a, INV, ERRM)         # p3: 상대오차 히트맵 (4지표 × method)
         page_err_curves(pdf, a, INV, ERRM)   # p4: 상대오차 곡선 2×2 (log y)
         page_bound(pdf, a, INV)              # p5: per-point max 오차 vs 이론 상한 (점선)
+        page_errdist(pdf, a, INV)            # p6: rank별 SV 점별 오차 분포 (2×4)
+        # p7 coalition-스파이크는 제외 (데이터셋 간 경향성 불명확 — 필요 시 아래 두 줄 복원)
+        # ensure_spike(a)
+        # page_spike(pdf, a)
     print(f"[write] {a.out}")
 
 

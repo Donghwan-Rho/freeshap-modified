@@ -599,6 +599,74 @@ class NystromLevNTKRegression(NystromPinvNTKRegression):
         return S_land
 
 
+# SV 분위 위치 -> landmark 창의 중심. 오름차순 정렬한 SV 순위 축에서의 위치다.
+#   bottom(q0) < q1 < median(q2) < q3 < top(q4) 로 **순서 있는 5 단계**를 이룬다.
+SV_LANDMARK_QUANTILES = {"q0": 0.00, "q1": 0.25, "q2": 0.50,
+                         "q3": 0.75, "q4": 1.00}
+
+
+class NystromSVLandmarkNTKRegression(NystromPinvNTKRegression):
+    """Shapley-value 기반 결정적 landmark 선택 (pinv 구성은 부모에서 그대로 상속).
+
+    같은 seed 의 **exact(inv) Shapley value** 로 학습점을 오름차순 정렬한 뒤,
+    지정한 분위 위치를 중심으로 연속한 d 개를 landmark 로 쓴다:
+
+        mode     중심 분위   n=2000, d=600 일 때 뽑히는 SV 순위
+        ------   ---------   ---------------------------------
+        bottom   q0 (0%)     1 ~ 600      (창이 왼쪽 끝에 붙음)
+        q1       25%         201 ~ 800
+        median   q2 (50%)    701 ~ 1300
+        q3       75%         1201 ~ 1800
+        top      q4 (100%)   1401 ~ 2000  (창이 오른쪽 끝에 붙음)
+
+    창의 시작점은 lo = clip( floor(q*n - d/2), 0, n-d ) 로, 양 끝에서는 clip 이 걸려
+    bottom/top 이 각각 왼쪽/오른쪽 끝에 붙는다. 따라서 d 가 커지면 인접한 모드끼리
+    창이 겹친다 (d=600, n=2000 이면 bottom 과 q1 이 400 점 = 67% 공유). 분위 대비가
+    가장 선명한 것은 **낮은 rank** 이고, d=100 이하에서는 다섯 창이 서로 소(disjoint)다.
+    이 겹침 정도는 아래 print 로 매 실행 로그에 남는다.
+
+    uniform/leverage 와 달리 추첨이 없으므로 landmark_seed 에 무관하게 결정적이다
+    (seed 는 파일명·재현성용으로만 유지).
+
+    주의 (해석):
+      * inv SV 를 미리 알아야 하므로 실용적 '방법'이 아니라 **oracle diagnostic** 이다.
+        landmark 선택이 Nystrom 오차를 얼마나 좌우하는지 상한/하한을 재는 용도.
+      * landmark 에 들어간 점은 커널 행이 정확히 복원되므로 그 점들의 SV 가 맞는 것은
+        어느 정도 자명하다. 평가는 **landmark 가 아닌 점** 으로 한정해야 순환이 아니다.
+        선택된 인덱스는 self.landmark_indices 로 노출한다.
+
+    landmark_sv: 길이 n_train 의 1-D 배열. 커널 행 순서(= sampled_idx 순서)와 정렬돼야 한다.
+    """
+
+    def __init__(self, *args, landmark_sv=None, landmark_mode="q4", **kwargs):
+        if landmark_sv is None:
+            raise ValueError("[NystromSVLandmark] landmark_sv 가 필요합니다 (inv Shapley value).")
+        if landmark_mode not in SV_LANDMARK_QUANTILES:
+            raise ValueError(f"[NystromSVLandmark] landmark_mode 는 "
+                             f"{'|'.join(SV_LANDMARK_QUANTILES)} "
+                             f"(받은 값: {landmark_mode})")
+        self._landmark_sv = np.asarray(landmark_sv, dtype=np.float64).ravel()
+        self._landmark_mode = landmark_mode
+        self.landmark_indices = None
+        super().__init__(*args, **kwargs)
+
+    def _select_landmarks(self, K_sym, n_train, d):
+        sv = self._landmark_sv
+        if sv.shape[0] != n_train:
+            raise ValueError(f"[NystromSVLandmark] landmark_sv 길이 {sv.shape[0]} != n_train {n_train}")
+        order = np.argsort(sv, kind="stable")          # 오름차순 (하위가 앞)
+        q = SV_LANDMARK_QUANTILES[self._landmark_mode]
+        lo = int(min(max(int(np.floor(q * n_train - d / 2.0)), 0), n_train - d))
+        pick = order[lo:lo + d]
+        S_land = np.sort(pick)
+        self.landmark_indices = S_land
+        print(f"[NystromSVLandmarkNTKRegression] mode={self._landmark_mode} (q={q:.2f}) "
+              f"landmarks d={d}  SV-rank window [{lo + 1}, {lo + d}] of {n_train}  "
+              f"(SV range in S: {sv[S_land].min():.4e} ~ {sv[S_land].max():.4e}; "
+              f"overall {sv.min():.4e} ~ {sv.max():.4e})")
+        return S_land
+
+
 ################################### Kernel regression with Dynamic Programming INVerse ################################
 class shapleyNTKRegression(nn.Module):
     def __init__(self, k_train, y, n_class, pre_inv=None, reg=1e-6):

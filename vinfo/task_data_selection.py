@@ -14,6 +14,7 @@ from probe import *
 from dvutils.Data_Shapley import Fast_Data_Shapley  # YAML tag 해석용
 
 import argparse
+from landmark_sv import resolve_landmark_sv   # SV 기반 Nystrom landmark (nystrom_q4/bottom)
 
 
 def parse_args():
@@ -23,10 +24,17 @@ def parse_args():
     parser.add_argument("--num_train_dp", type=int, default=8530)
     parser.add_argument("--val_sample_num", type=int, default=1066)
     parser.add_argument("--tmc_iter", type=int, default=500)
+    # --- SV 기반 Nystrom landmark (nystrom_q4 / nystrom_q0) 전용 ---
+    parser.add_argument("--landmark_sv_root", type=str, default="./freeshap_res",
+                        help="landmark 재료인 inv Shapley 결과 루트 (out_root 와 별개)")
+    parser.add_argument("--landmark_sv_pkl", type=str, default=None,
+                        help="inv Shapley pkl 경로 직접 지정 (지정 시 --landmark_sv_root 무시)")
     parser.add_argument("--approximate", type=str, default="inv",
-                        choices=["inv", "eigen", "nystrom", "nystrom_pinv", "nystrom_lev", "none"])
+                        choices=["inv", "eigen", "nystrom", "nystrom_pinv", "nystrom_lev",
+                                 "nystrom_q4", "nystrom_q3", "nystrom_q2", "nystrom_q1",
+                                 "nystrom_q0", "none"])
     parser.add_argument("--eigen_rank", type=float, default=30,
-                        help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10% of data)")
+                        help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10%% of data)")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
                         help="Lambda (regularization parameter) for INV mode")
     parser.add_argument("--eigen_lambda_", type=float, default=1e-2,
@@ -86,7 +94,14 @@ def main():
     # only the regression CLASS (probe_model.nystrom_use_pinv) and method_dir differ.
     _is_pinv = (approximate == "nystrom_pinv")
     _is_lev = (approximate == "nystrom_lev")   # leverage-score landmarks (pinv construction)
-    if _is_pinv or _is_lev:
+    # SV 기반 결정적 landmark (oracle diagnostic). 구성은 pinv 와 동일하고 landmark 선택만 다르다.
+    _lm_mode = ("q4" if approximate == "nystrom_q4"
+                else "q0" if approximate == "nystrom_q0"
+                else "q2" if approximate == "nystrom_q2"
+                else "q1" if approximate == "nystrom_q1"
+                else "q3" if approximate == "nystrom_q3" else "uniform")
+    _is_svlm = (_lm_mode != "uniform")
+    if _is_pinv or _is_lev or _is_svlm:
         approximate = "nystrom"
     num_train_selected_list = args.num_train_selected_list
     eigen_rank_pct = args.eigen_rank
@@ -137,6 +152,7 @@ def main():
         probe_model.approximate(approximate)
     probe_model.nystrom_use_pinv = _is_pinv   # pinv -> pseudoinverse-Nystrom class
     probe_model.nystrom_use_lev = _is_lev    # lev -> leverage-score Nystrom class
+    probe_model.nystrom_landmark_mode = _lm_mode   # top/bottom -> SV 기반 결정적 landmark
 
     if approximate == "eigen":
         probe_model.set_eigen_params(
@@ -175,6 +191,16 @@ def main():
         )
         with open(ntk_path_peek, "rb") as f:
             ntk_peek = pickle.load(f)["ntk"]
+        if _is_svlm:
+            # SV 기반 결정적 landmark: 같은 seed 의 inv Shapley 를 읽어 probe 에 주입.
+            # nyseps auto 는 '랜덤 subset' 으로 σ_min(W) 를 추정하므로 실제 landmark 와
+            # 어긋난다 -> 이 모드에서는 막는다 (러너는 --nyseps 1e-8 고정).
+            if str(args.nyseps).lower() == "auto":
+                raise SystemExit("[nystrom_q4/bottom] --nyseps auto 는 지원하지 않습니다. "
+                                 "--nyseps 1e-8 처럼 명시하세요.")
+            probe_model.nystrom_landmark_sv = resolve_landmark_sv(
+                args, dataset_name, model_name, seed, num_train_dp,
+                val_sample_num, inv_lambda_, tmc_iter=tmc_iter)
         if str(args.nyseps).lower() == "auto":
             _raw = _compute_nyseps_auto(ntk_peek, num_train_dp, nystrom_d, seed)
             print(f"[nyseps auto] σ_min(W) raw = {_raw:.6e}")
@@ -194,7 +220,8 @@ def main():
         del ntk_peek
 
     # ===== 1) Shapley pkl 경로 구성 및 로드 =====
-    method_dir = "nystrom_lev" if _is_lev else ("nystrom_pinv" if _is_pinv else approximate)  # separate folder for pinv
+    method_dir = (f"nystrom_{_lm_mode}" if _is_svlm else
+                  "nystrom_lev" if _is_lev else ("nystrom_pinv" if _is_pinv else approximate))  # separate folder for pinv
 
     if approximate == "eigen":
         eigen_lam_str = f"{eigen_lambda_:.0e}"
@@ -211,6 +238,10 @@ def main():
             extra_tag = extra_tag.replace("_nys", "_nyspinv", 1)
         elif _is_lev:
             extra_tag = extra_tag.replace("_nys", "_nyslev", 1)  # filename marker: pseudoinverse variant
+        elif _is_svlm:
+            extra_tag = extra_tag.replace(
+                "_nys", {"q4": "_nysq4", "q3": "_nysq3", "q2": "_nysq2",
+                        "q1": "_nysq1", "q0": "_nysq0"}[_lm_mode], 1)
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"

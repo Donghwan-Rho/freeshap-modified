@@ -31,6 +31,14 @@ from probe import *            # noqa: F401,F403  — YAML tag (!NTKProbe 등) �
 from dvutils.Data_Shapley import Fast_Data_Shapley  # noqa: F401 — YAML tag 등록
 from entks.ntk_regression import (shapleyNTKRegression, EigenNTKRegression,
                                   NystromPinvNTKRegression, NystromLevNTKRegression)
+try:  # vision(cifar10) 지원: yaml tag (!VisionReader 등) 등록 — 없으면 텍스트 전용으로 동작
+    from vision.vision_dataset import VisionReader, VisionDataset  # noqa: F401
+    from vision.vision_probe   import NTKVisionProbe                # noqa: F401
+except ImportError:
+    pass
+
+# --model 에 따른 기본 config 매핑 (--config 로 명시 덮어쓰기 가능)
+MODEL2CONFIG = {"bert": "ntk_prompt", "llama": "ntk_llama", "resnet": "ntk_vision"}
 
 GRID_LAMS = [1e-3, 1e-2, 1e-1, 1.0]
 GRID_EPS  = [1e-8, 1e-6, 1e-4, 1e-2]
@@ -54,10 +62,12 @@ def make_a(dataset, val, model="bert", rank=RANK_PCT):
 kp_npz_path = R.kp_npz_path   # 경로 정의는 리포트 모듈과 단일 소스 공유
 
 
-def setup_probe(dataset, seed, val, model_name="bert"):
+def setup_probe(dataset, seed, val, model_name="bert", config=None):
     """task_data_selection 셋업 재사용: yaml→probe, NTK 캐시 로드(정규화 포함), train 라벨."""
     torch.manual_seed(seed); np.random.seed(seed)
-    yaml_path = f"../configs/dshap/{dataset}/ntk_prompt.yaml"
+    if config is None:
+        config = MODEL2CONFIG.get(model_name, "ntk_prompt")
+    yaml_path = f"../configs/dshap/{dataset}/{config}.yaml"
     txt = open(yaml_path).read()
     if not torch.cuda.is_available():
         # GPU 없는 노드(mathcluster 등): NTK 는 캐시라 커널회귀는 CPU 로 충분
@@ -65,7 +75,8 @@ def setup_probe(dataset, seed, val, model_name="bert"):
         print("[info] CUDA 없음 → device: cpu 로 로드")
     ya = yaml.load(txt, Loader=yaml.Loader)
     list_dataset = ya["dataset"]; probe = ya["probe_com"]
-    probe.model.init(list_dataset.label_word_list)
+    if hasattr(list_dataset, "label_word_list") and hasattr(probe.model, "init"):
+        probe.model.init(list_dataset.label_word_list)   # prompt 모델(bert/llama)만 해당; vision 은 skip
     ntk_path = f"./freeshap_res/ntk/{dataset}/{model_name}_seed{seed}_num{NUM}_val{val}_signFalse.pkl"
     bundle = pickle.load(open(ntk_path, "rb"))
     sidx = np.array(bundle["sampled_idx"])
@@ -135,16 +146,16 @@ def _cells_for(args):
 def backfill_kernel(args):
     """기존 npz 에 kernel_relerr 필드만 추가 (NTK 캐시만 필요; 데이터셋/모델 로드 없음)."""
     for seed in args.seeds:
-        g = glob.glob(f"./freeshap_res/ntk/{args.dataset}/bert_seed{seed}_num{NUM}_val*_signFalse.pkl")
+        g = glob.glob(f"./freeshap_res/ntk/{args.dataset}/{args.model}_seed{seed}_num{NUM}_val*_signFalse.pkl")
         if not g:
             print(f"[skip] seed{seed}: NTK 없음"); continue
         val = int(re.search(r"_val(\d+)_", os.path.basename(g[0])).group(1))
         todo = []
         for (r, mth, l, e) in _cells_for(args):
-            p = kp_npz_path(make_a(args.dataset, val, rank=r), mth, l, e, seed)
+            p = kp_npz_path(make_a(args.dataset, val, model=args.model, rank=r), mth, l, e, seed)
             if os.path.exists(p) and (args.overwrite or "kernel_relerr" not in np.load(p).files):
                 todo.append((r, mth, l, e, p))
-        ip = kp_npz_path(make_a(args.dataset, val), "inv", None, None, seed)
+        ip = kp_npz_path(make_a(args.dataset, val, model=args.model), "inv", None, None, seed)
         if os.path.exists(ip) and "kernel_relerr" not in np.load(ip).files:
             d = dict(np.load(ip)); d["kernel_relerr"] = 0.0
             np.savez_compressed(ip, **d)
@@ -187,6 +198,10 @@ def main():
     ap.add_argument("--epss", type=float, nargs="+", default=GRID_EPS)
     ap.add_argument("--methods", type=str, nargs="+", default=["eigen", "nystrom_pinv"],
                     help="approx method 목록 (eigen/nystrom_pinv/nystrom_lev)")
+    ap.add_argument("--model", type=str, default="bert",
+                    help="모델 이름 (파일명/NTK 캐시 prefix): bert / llama / resnet")
+    ap.add_argument("--config", type=str, default=None,
+                    help="YAML config 이름 (기본: model 에 따라 ntk_prompt/ntk_llama/ntk_vision 자동)")
     ap.add_argument("--overwrite", action="store_true", help="기존 npz 있어도 다시 계산")
     ap.add_argument("--backfill_kernel", action="store_true",
                     help="기존 npz 에 kernel_relerr 만 추가 (예측 재계산 없음, 네트워크 불필요)")
@@ -201,30 +216,30 @@ def main():
         backfill_kernel(args); return
 
     for seed in args.seeds:
-        g = glob.glob(f"./freeshap_res/ntk/{args.dataset}/bert_seed{seed}_num{NUM}_val*_signFalse.pkl")
+        g = glob.glob(f"./freeshap_res/ntk/{args.dataset}/{args.model}_seed{seed}_num{NUM}_val*_signFalse.pkl")
         if not g:
             print(f"[skip] seed{seed}: NTK 캐시 없음"); continue
         val = int(re.search(r"_val(\d+)_", os.path.basename(g[0])).group(1))
 
         todo = []
         if args.overwrite or not os.path.exists(
-                kp_npz_path(make_a(args.dataset, val), "inv", None, None, seed)):
+                kp_npz_path(make_a(args.dataset, val, model=args.model), "inv", None, None, seed)):
             todo.append((args.ranks[0], "inv", None, None))
         for (r, mth, l, e) in _cells_for(args):
             if args.overwrite or not os.path.exists(
-                    kp_npz_path(make_a(args.dataset, val, rank=r), mth, l, e, seed)):
+                    kp_npz_path(make_a(args.dataset, val, model=args.model, rank=r), mth, l, e, seed)):
                 todo.append((r, mth, l, e))
         if not todo:
             print(f"[skip] seed{seed}: 전부 존재"); continue
 
         print(f"[setup] {args.dataset} seed{seed} val{val}  (todo {len(todo)}칸) — probe/NTK 로드...")
-        probe = setup_probe(args.dataset, seed, val)
+        probe = setup_probe(args.dataset, seed, val, model_name=args.model, config=args.config)
         n_train = probe.ntk.size(2)
         all_idx = np.arange(n_train, dtype=int)
         K_sym = _K_sym_from_ntk(probe.ntk)   # 커널 근사 오차용 (train kernel)
 
         for (r, mth, l, e) in todo:
-            a = make_a(args.dataset, val, rank=r)
+            a = make_a(args.dataset, val, model=args.model, rank=r)
             out = kp_npz_path(a, mth, l, e, seed)
             d_act = int(NUM * r / 100)
             try:

@@ -40,7 +40,8 @@ class _DictWrapper(Dataset):
         이미지는 __init__에서 한 번 미리 transform하여 리스트로 캐시.
         RAM: 3500 × (3×224²×4B) ≈ 2GB — 여유롭게 맞음. NLP에는 영향 없음(별도 클래스).
     """
-    def __init__(self, base_ds, idxs, eager_images=True, verbose=True):
+    def __init__(self, base_ds, idxs, eager_images=True, verbose=True,
+                 flip_set=None, num_classes=None):
         self.base = base_ds
         self.idxs = list(idxs)
         n = len(self.idxs)
@@ -54,6 +55,12 @@ class _DictWrapper(Dataset):
             self.labels_cache = [int(base_ds[o][1]) for o in self.idxs]
 
         # ★ 이미지 캐시 — 미리 한 번씩만 transform 실행
+        # ---- wrong-label detection 용 poison: (label + 1) % C 로 flip ----
+        if flip_set:
+            C = int(num_classes) if num_classes else (max(self.labels_cache) + 1)
+            self.labels_cache = [((lab + 1) % C) if int(o) in flip_set else lab
+                                 for lab, o in zip(self.labels_cache, self.idxs)]
+
         if eager_images:
             if verbose:
                 print(f"[_DictWrapper] preloading {n} transformed images ...", flush=True)
@@ -93,9 +100,14 @@ class VisionReader(InitYAMLObject):
         self.dataset_name = args.get('dataset_name', 'cifar10')
         self.datadir      = args.get('datadir', './datasets_vision')
         self.image_size   = int(args.get('image_size', 224))
+        # ---- poison (wrong-label detection) 옵션: NLP dataset.py EasyReader 와 동일 규약 ----
+        self.data_poison = bool(args.get('data_poison', False))
+        self.poison_pct  = float(args.get('poison_pct', 10))   # 전체 train 의 몇 % flip
+        self.poison_seed = int(args.get('poison_seed', 2023))  # task 에서 attribute 로 덮어씀
         os.makedirs(self.datadir, exist_ok=True)
         self._train = None
         self._val   = None
+        self._flip = None
 
     def _ensure_loaded(self):
         if self._train is not None: return
@@ -110,6 +122,21 @@ class VisionReader(InitYAMLObject):
             self._num_classes = 100
         else:
             raise ValueError(f"unknown vision dataset: {self.dataset_name}")
+
+    def flip_indices(self):
+        """poison 대상 train 원본 인덱스 집합. NLP EasyReader 와 동일 규약:
+        random.Random(poison_seed).sample(range(nrows), int(nrows * pct/100))."""
+        if not self.data_poison:
+            return set()
+        if self._flip is None:
+            import random as _random
+            self._ensure_loaded()
+            nrows = len(self._train)
+            k = int(nrows * self.poison_pct / 100)
+            self._flip = set(_random.Random(self.poison_seed).sample(range(nrows), k))
+            print(f"[poison] {self.dataset_name}: {k}/{nrows} flipped "
+                  f"(pct={self.poison_pct}, seed={self.poison_seed})")
+        return self._flip
 
     def get_train(self):
         self._ensure_loaded(); return self._train
@@ -158,9 +185,12 @@ class VisionDataset(InitYAMLObject):
             raise ValueError(f"unknown split={split}")
 
     def get_idx_dataset(self, idxs, split="train"):
-        """freeshap 규약: split의 idxs 서브셋을 dict-item Dataset으로 반환."""
+        """freeshap 규약: split의 idxs 서브셋을 dict-item Dataset으로 반환.
+        poison 이 켜져 있으면 train split 라벨만 flip (val 은 그대로 — NLP 판과 동일)."""
         base = self._split_dataset(split)
-        return _DictWrapper(base, idxs)
+        flip = (self.data_loader.flip_indices()
+                if (split == "train" and getattr(self.data_loader, "data_poison", False)) else None)
+        return _DictWrapper(base, idxs, flip_set=flip, num_classes=self.num_labels)
 
     def get_idx_dataloader(self, idxs, split="train", batch_size=None, shuffle=False):
         ds = self.get_idx_dataset(idxs, split)

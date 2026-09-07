@@ -3,50 +3,49 @@ import numpy as np
 import yaml
 import torch
 import random
-import time
 
 import sys, os
 sys.path.insert(0, './lmntk')
 sys.path.insert(0, './vinfo/lmntk')
 
+# vision 폴더에서 실행 → vinfo/를 sys.path에 추가해 probe/dataset 임포트 가능하게
+_HERE  = os.path.dirname(os.path.abspath(__file__))
+_VINFO = os.path.dirname(_HERE)
+if _VINFO not in sys.path:
+    sys.path.insert(0, _VINFO)
+
 from dataset import *
 from probe import *
 from dvutils.Data_Shapley import Fast_Data_Shapley  # YAML tag 해석용
 
+# vision 신규 클래스 (yaml_tag 등록)
+from vision.vision_dataset import VisionReader, VisionDataset  # noqa: F401
+from vision.vision_probe   import NTKVisionProbe                # noqa: F401
+
 import argparse
-from landmark_sv import resolve_landmark_sv   # SV 기반 Nystrom landmark (nystrom_q4/bottom)
+
+from landmark_sv import resolve_landmark_sv, add_landmark_args   # SV 기반 Nystrom landmark (nystrom_q0..q4)
 
 # ============================================================================
-# task_data_removal.py  —  task_data_selection.py 와 동일 양식.
-#   차이: downstream 을 "top-k% 선택 후 예측" → "top/bottom/random k% 제거 후
-#         남은 데이터로 예측" 으로 교체.
-#   * SV(shapley pkl) 및 NTK 는 selection 과 **완전히 동일한 파일 재사용** (재계산 X).
-#   * 랭킹: SV 내림차순(sorted_indices, 큰 값이 앞).
-#       - top removal    : 고가치(높은 SV) k% 제거 → remaining = sorted[k:]
-#       - bottom removal : 저가치(낮은 SV) k% 제거 → remaining = sorted[:N-k]
-#       - random removal : 무작위 k% 제거
-#   * eigen/nystrom 은 dual-mode(approx + inv) 예측. 분석엔 inv-mode 사용
-#     (approx SV 로 랭킹, exact 커널로 예측 — selection/detection 과 같은 규약).
-#   출력: {out_root}/data_removal/{ds}/{method}/predictions/{setting}_removal.txt
+# task_data_removal_vision.py — text 판 task_data_removal.py 의 vision 포트.
+#   downstream: top/bottom/random k% 제거 후 남은 데이터로 kernel_regression 예측.
+#   * SV(shapley pkl)/NTK 는 task_shapley_vision 과 동일 파일 재사용 (재계산 X).
+#   * eigen/nystrom(+pinv/lev) 은 dual-mode(approx + inv) 예측 — text 판과 동일 규약.
+#   출력: {out_root}/data_removing/{ds}/{method}/predictions/{setting}_predictions.txt
 # ============================================================================
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", type=str, default="mr")
-    parser.add_argument("--seed", type=int, default=2023)
-    parser.add_argument("--num_train_dp", type=int, default=8530)
-    parser.add_argument("--val_sample_num", type=int, default=1066)
+    parser.add_argument("--dataset_name", type=str, default="cifar10")
+    parser.add_argument("--seed", type=int, default=2024)
+    parser.add_argument("--num_train_dp", type=int, default=2000)
+    parser.add_argument("--val_sample_num", type=int, default=1000)
     parser.add_argument("--tmc_iter", type=int, default=500)
-    # --- SV 기반 Nystrom landmark (nystrom_q4 / nystrom_q0) 전용 ---
-    parser.add_argument("--landmark_sv_root", type=str, default="./freeshap_res",
-                        help="landmark 재료인 inv Shapley 결과 루트 (out_root 와 별개)")
-    parser.add_argument("--landmark_sv_pkl", type=str, default=None,
-                        help="inv Shapley pkl 경로 직접 지정 (지정 시 --landmark_sv_root 무시)")
     parser.add_argument("--approximate", type=str, default="inv",
                         choices=["inv", "eigen", "nystrom", "nystrom_pinv", "nystrom_lev",
-                                 "nystrom_q4", "nystrom_q3", "nystrom_q2", "nystrom_q1",
-                                 "nystrom_q0", "none"])
+                                 "nystrom_q4", "nystrom_q3", "nystrom_q2",
+                                 "nystrom_q1", "nystrom_q0", "none"])
     parser.add_argument("--eigen_rank", type=float, default=30,
                         help="Eigen rank as percentage of num_train_dp (e.g., 10 means 10%% of data)")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6,
@@ -57,39 +56,29 @@ def parse_args():
                         help="Nystrom landmark count as percentage of num_train_dp, same convention as --eigen_rank")
     parser.add_argument("--nystrom_lambda_", type=float, default=1e-3,
                         help="Lambda (ridge regularization) for Nystrom mode")
-    parser.add_argument("--nyseps", type=str, default="1e+1",
-                        help="Nystrom feature-construction jitter ε in (W+εI). Float 또는 'auto'. Default 1e+1.")
     parser.add_argument("--eigeps", type=str, default="1e-8",
-                        help="Eigen eigenvalue jitter ε: lam -> max(lam,0)+ε. Default 1e-8.")
+                        help="Eigen eigenvalue floor (filename tag: eigeps)")
+    parser.add_argument("--nyseps", type=str, default="1e-8",
+                        help="Nystrom jitter/eps (filename tag: nyseps)")
     parser.add_argument("--out_root", type=str, default="./freeshap_res",
-                        help="Root dir for shapley/data_removal I/O (NTK read from ./freeshap_res/ntk).")
+                        help="Root dir for shapley/data_removing I/O (NTK read from ./freeshap_res/ntk).")
     parser.add_argument("--num_train_removed_list", type=int, nargs='+',
                         default=[i for i in range(0, 100)],
                         help="제거할 num_train_dp 퍼센트 목록 (0=제거없음 baseline ~ 99).")
-    parser.add_argument("--config", type=str, default="ntk_prompt",
+    parser.add_argument("--config", type=str, default="ntk_vision",
                         help="YAML config name without .yaml extension")
+    add_landmark_args(parser)
     return parser.parse_args()
 
 
 def _fmt_nyseps(eps):
-    """decade 표기: 1e+01 → '1e+1', 1e-08 → '1e-8'."""
+    """1e+02 → '1e+2', 1e-08 → '1e-8' (text 판 파일명 포맷과 동일)."""
     return f"{eps:.0e}".replace('e+0', 'e+').replace('e-0', 'e-')
 
 
 def _quantize_nyseps(eps):
-    """Filename(1 sig-fig 과학표기)에 맞춰 값 quantize. 1e+01 → 10.0."""
+    """파일명 표기와 실제 사용값을 일치시키기 위한 quantize (text 판과 동일)."""
     return float(f"{eps:.0e}")
-
-
-def _compute_nyseps_auto(ntk, num_train_dp, nystrom_d, landmark_seed):
-    """σ_min(W) 계산. W = K[S,S], S = landmark_seed 로 뽑은 subset."""
-    K = ntk[0] if ntk.ndim == 3 else ntk
-    K_np = K.to("cpu", dtype=torch.float64).numpy()[:num_train_dp, :num_train_dp]
-    K_np = 0.5 * (K_np + K_np.T)
-    rng = np.random.RandomState(int(landmark_seed))
-    S = np.sort(rng.choice(num_train_dp, size=nystrom_d, replace=False))
-    W = K_np[np.ix_(S, S)]
-    return float(np.linalg.eigvalsh(W)[0])
 
 
 def main():
@@ -102,8 +91,8 @@ def main():
     tmc_iter = args.tmc_iter
 
     approximate = args.approximate
-    # nystrom_pinv (pseudoinverse-Nystrom): alias to "nystrom" for all param/tag/path logic;
-    # only the regression CLASS (probe_model.nystrom_use_pinv) and method_dir differ.
+    # nystrom_pinv/nystrom_lev: alias to "nystrom" for all param/tag/path logic; only the
+    # regression CLASS (probe_model.nystrom_use_pinv/lev) and method_dir differ. (text 판과 동일)
     _is_pinv = (approximate == "nystrom_pinv")
     _is_lev = (approximate == "nystrom_lev")   # leverage-score landmarks (pinv construction)
     # SV 기반 결정적 landmark (oracle diagnostic). 구성은 pinv 와 동일하고 landmark 선택만 다르다.
@@ -119,8 +108,12 @@ def main():
     eigen_rank_pct = args.eigen_rank
     inv_lambda_ = args.inv_lambda_
     eigen_lambda_ = args.eigen_lambda_
+
+    # eps 처리 (파일명 태그와 실제 사용값 일치; text 판과 동일)
     eigen_eps = _quantize_nyseps(float(args.eigeps))
     eigeps_str = _fmt_nyseps(eigen_eps)
+    nystrom_eps = _quantize_nyseps(float(args.nyseps))
+    nyseps_str = _fmt_nyseps(nystrom_eps)
 
     eigen_rank = int(num_train_dp * eigen_rank_pct / 100)
     print(f"[info] eigen_rank={eigen_rank_pct}% of num_dp={num_train_dp} -> actual rank={eigen_rank}")
@@ -130,7 +123,7 @@ def main():
     if approximate == "nystrom":
         print(f"[info] nystrom_d={nystrom_d_pct}% of num_dp={num_train_dp} -> actual landmarks={nystrom_d}")
 
-    prompt = True
+    prompt = False   # vision은 prompt 없음
     signgd = False
     eigen_solver = "cholesky"
     eigen_dtype = "float32"
@@ -156,63 +149,50 @@ def main():
         probe_model.approximate(approximate)
     probe_model.nystrom_use_pinv = _is_pinv   # pinv -> pseudoinverse-Nystrom class
     probe_model.nystrom_use_lev = _is_lev    # lev -> leverage-score Nystrom class
-    probe_model.nystrom_landmark_mode = _lm_mode   # top/bottom -> SV 기반 결정적 landmark
+    probe_model.nystrom_landmark_mode = _lm_mode   # q0..q4 -> SV 기반 결정적 landmark
 
     if approximate == "eigen":
         probe_model.set_eigen_params(
             rank=eigen_rank, lam=eigen_lambda_, solver=eigen_solver,
             dtype=eigen_dtype, seed=seed, floor=eigen_eps)
+    elif approximate == "nystrom":
+        probe_model.set_nystrom_params(
+            d=nystrom_d, lam=float(args.nystrom_lambda_), solver=eigen_solver,
+            dtype=eigen_dtype, landmark_seed=seed, jitter=nystrom_eps)
     elif approximate == "inv":
         probe_model.set_inv_params(lam=inv_lambda_)
 
     if signgd:
         probe_model.signgd()
 
+    # ===== model_name 결정 =====
     if 'llama' in probe_model.args['model']:
         model_name = 'llama'
     elif 'roberta' in probe_model.args['model']:
         model_name = 'roberta'
     elif 'bert' in probe_model.args['model']:
         model_name = 'bert'
+    elif 'resnet' in probe_model.args['model']:
+        model_name = 'resnet'
+    elif 'resnext' in probe_model.args['model']:
+        model_name = 'resnext'
     else:
         model_name = 'model'
 
-    # ===== 0.5) nystrom 이면 NTK peek + --nyseps 처리 =====
-    nystrom_eps = None
-    nyseps_str = None
-    if approximate == "nystrom":
-        ntk_path_peek = (
-            f"./freeshap_res/ntk/{dataset_name}/{model_name}"
-            f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
-        )
-        with open(ntk_path_peek, "rb") as f:
-            ntk_peek = pickle.load(f)["ntk"]
-        if _is_svlm:
-            # SV 기반 결정적 landmark: 같은 seed 의 inv Shapley 를 읽어 probe 에 주입.
-            # nyseps auto 는 '랜덤 subset' 으로 σ_min(W) 를 추정하므로 실제 landmark 와
-            # 어긋난다 -> 이 모드에서는 막는다 (러너는 --nyseps 1e-8 고정).
-            if str(args.nyseps).lower() == "auto":
-                raise SystemExit("[nystrom_q4/bottom] --nyseps auto 는 지원하지 않습니다. "
-                                 "--nyseps 1e-8 처럼 명시하세요.")
-            probe_model.nystrom_landmark_sv = resolve_landmark_sv(
-                args, dataset_name, model_name, seed, num_train_dp,
-                val_sample_num, inv_lambda_, tmc_iter=tmc_iter)
+    # ===== SV 기반 landmark: 같은 seed 의 inv Shapley 를 읽어 probe 에 주입 =====
+    #   nyseps auto 는 랜덤 subset 으로 sigma_min(W) 를 추정하므로 실제 landmark 와 어긋난다.
+    if _is_svlm:
         if str(args.nyseps).lower() == "auto":
-            _raw = _compute_nyseps_auto(ntk_peek, num_train_dp, nystrom_d, seed)
-            print(f"[nyseps auto] σ_min(W) raw = {_raw:.6e}")
-            nystrom_eps = _quantize_nyseps(_raw)
-        else:
-            nystrom_eps = _quantize_nyseps(float(args.nyseps))
-        nyseps_str = _fmt_nyseps(nystrom_eps)
-        print(f"[nyseps] value={nystrom_eps:.4e}  tag='{nyseps_str}'")
-        probe_model.set_nystrom_params(
-            d=nystrom_d, lam=float(args.nystrom_lambda_), solver=eigen_solver,
-            dtype=eigen_dtype, landmark_seed=seed, jitter=nystrom_eps)
-        del ntk_peek
+            raise SystemExit("[nystrom_q0..q4] --nyseps auto 는 지원하지 않습니다. "
+                             "--nyseps 1e-8 처럼 명시하세요.")
+        probe_model.nystrom_landmark_sv = resolve_landmark_sv(
+            args, dataset_name, model_name, seed, num_train_dp,
+            val_sample_num, inv_lambda_, tmc_iter=tmc_iter)
 
-    # ===== 1) Shapley pkl 경로 (selection 과 동일한 파일 재사용) =====
+    # ===== 1) Shapley pkl 경로 (task_shapley_vision 과 동일한 파일 재사용) =====
     method_dir = (f"nystrom_{_lm_mode}" if _is_svlm else
-                  "nystrom_lev" if _is_lev else ("nystrom_pinv" if _is_pinv else approximate))  # separate folder for pinv
+                  "nystrom_lev" if _is_lev else
+                  ("nystrom_pinv" if _is_pinv else approximate))
     if approximate == "eigen":
         eigen_lam_str = f"{eigen_lambda_:.0e}"
         inv_lam_str = f"{inv_lambda_:.0e}"
@@ -223,13 +203,11 @@ def main():
         extra_tag = (f"_nys{nystrom_d_pct}_nyslam{nys_lam_str}_nyseps{nyseps_str}"
                      f"_invlam{inv_lam_str}_{eigen_solver}_{eigen_dtype}")
         if _is_pinv:
-            extra_tag = extra_tag.replace("_nys", "_nyspinv", 1)
+            extra_tag = extra_tag.replace("_nys", "_nyspinv", 1)  # filename marker: pseudoinverse variant
         elif _is_lev:
-            extra_tag = extra_tag.replace("_nys", "_nyslev", 1)  # filename marker: pseudoinverse variant
+            extra_tag = extra_tag.replace("_nys", "_nyslev", 1)   # filename marker: leverage-score variant
         elif _is_svlm:
-            extra_tag = extra_tag.replace(
-                "_nys", {"q4": "_nysq4", "q3": "_nysq3", "q2": "_nysq2",
-                        "q1": "_nysq1", "q0": "_nysq0"}[_lm_mode], 1)
+            extra_tag = extra_tag.replace("_nys", f"_nys{_lm_mode}", 1)
     else:
         lambda_str = f"{inv_lambda_:.0e}"
         extra_tag = f"_lam{lambda_str}"
@@ -251,7 +229,7 @@ def main():
     timing_info = result.get("timing_info", {})
     print("dv_result shape:", dv_result.shape)
 
-    # ===== 2) NTK 캐시 로드 (selection 과 동일) =====
+    # ===== 2) NTK 캐시 로드 =====
     ntk_path = (
         f"./freeshap_res/ntk/{dataset_name}/{model_name}"
         f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
@@ -355,8 +333,8 @@ def main():
 
     def _block(f, mode, lam):
         f.write(f"{mode} mode lambda={lam:.0e}\n")
-        f.write(f"top_removal:\n{curves[(mode, 'q4')]}\n")
-        f.write(f"bottom_removal:\n{curves[(mode, 'q0')]}\n")
+        f.write(f"top_removal:\n{curves[(mode, 'top')]}\n")
+        f.write(f"bottom_removal:\n{curves[(mode, 'bottom')]}\n")
         f.write(f"random:\n{curves[(mode, 'random')]}\n\n")
 
     with open(out_path, 'w') as f:
