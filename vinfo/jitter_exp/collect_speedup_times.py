@@ -254,13 +254,16 @@ def print_llama2000_a0():
 
 
 # ==================== llama full-size(n5000; rte 2490, mrpc 3668): python ... llama5000[_acc|_a0] ====
-def llama5k_inv_paths(ds, s):
-    n, v = NUM.get(ds, 5000), VAL.get(ds, 1000)
-    return [f"{BASE}/{ds}/inv/predictions/llama_seed{s}_num{n}_val{v}_lam1e-06_signFalse_earlystopTrue_tmc500_predictions.txt"]
+def llama5k_inv_paths(ds, s, base=None):
+    """bert 의 inv_paths 와 같은 규약: acc/a0 는 BASE(SELECTION_DIR), 시간은 BASE_TIME 에서."""
+    base = BASE if base is None else base
+    n, v = _num(ds, base), VAL.get(ds, 1000)
+    return [f"{base}/{ds}/inv/predictions/llama_seed{s}_num{n}_val{v}_lam1e-06_signFalse_earlystopTrue_tmc500_predictions.txt"]
 
-def llama5k_eigen_paths(ds, s, r):
-    n, v = NUM.get(ds, 5000), VAL.get(ds, 1000)
-    return [f"{BASE}/{ds}/eigen/predictions/llama_seed{s}_num{n}_val{v}_eig{r}.0"
+def llama5k_eigen_paths(ds, s, r, base=None):
+    base = BASE if base is None else base
+    n, v = _num(ds, base), VAL.get(ds, 1000)
+    return [f"{base}/{ds}/eigen/predictions/llama_seed{s}_num{n}_val{v}_eig{r}.0"
             f"_eiglam1e-02_eigeps1e-8_invlam1e-06_cholesky_float32_signFalse_earlystopTrue_tmc500_predictions.txt"]
 
 def _print_generic(header, regen, inv_paths_fn, eigen_paths_fn, value_fn, suffix):
@@ -283,7 +286,8 @@ def _print_generic(header, regen, inv_paths_fn, eigen_paths_fn, value_fn, suffix
 
 def print_llama5000():
     _print_generic("# ==== llama full-size (n5000; rte 2490, mrpc 3668) — A6000 shapley computation 초 ====",
-                   "llama5000", llama5k_inv_paths, llama5k_eigen_paths, a6000_time, "time")
+                   "llama5000", lambda ds, s: llama5k_inv_paths(ds, s, BASE_TIME),
+                   lambda ds, s, r: llama5k_eigen_paths(ds, s, r, BASE_TIME), a6000_time, "time")
 
 def print_llama5000_acc():
     _print_generic("# ==== llama full-size — selection 1~20% top-k 평균 정확도 (val acc x 1e4, inv-mode) ====",

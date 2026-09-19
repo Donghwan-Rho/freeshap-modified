@@ -24,7 +24,7 @@
 # 결과 파일(txt+pkl)이 있으면 스킵 (resume 안전).
 # ============================================================
 MODEL=${MODEL:-bert}
-OUT_ROOT=${OUT_ROOT:-./freeshap_res_wld}
+OUT_ROOT=${OUT_ROOT:-./freeshap_res}
 RANKS=${RANKS:-"1 5 10 15 20 25 30"}
 DO_INV=${DO_INV:-1}; DO_EIGEN=${DO_EIGEN:-1}
 POISON=10
