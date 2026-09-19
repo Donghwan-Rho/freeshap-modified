@@ -24,8 +24,8 @@ probe_com: !NTKProbe &id_probe_com
     savedir: ./ntks
     logdir: null
     workers_per_device: 1
-    grad_chunksize: 300000
-    mm_col_chunksize: 4000
+    grad_chunksize: 800000 # Reduced from 10000000 to prevent memory allocation error
+    mm_col_chunksize: 20000 # Reduced from 20000 to match grad_chunksize reduction
     loader_batch_size: 16
     loader_num_workers: 0
     pin_memory: False
