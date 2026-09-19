@@ -24,28 +24,30 @@
 # 결과 -> freeshap_res/data_selection/ . 이미 있으면 스킵 (resume 안전).
 # 그림은 SELECTION_DIR 로 폴더를 고른다 (기본 data_selection).
 MODEL=${MODEL:-bert}
+# ---- 인자 분류: 숫자=seed, bert/llama/resnet=모델, 그 외=dataset ----
+#   (MODEL=llama 환경변수 대신 'sh n06_selection_eval.sh llama' 처럼 써도 되게)
+SEEDS=""; DATASETS=""
+for a in "$@"; do
+  case "$a" in
+    [0-9]*)             SEEDS="$SEEDS $a" ;;
+    bert|llama|resnet)  MODEL="$a" ;;
+    *)                  DATASETS="$DATASETS $a" ;;
+  esac
+done
 N=${N:-5000}
 RANKS=${RANKS:-"1 5 10 15 20 25 30"}
 DO_SELECTION=${DO_SELECTION:-1}
 DO_A0=${DO_A0:-1}
 
 case "$MODEL" in
-  bert)   CFG=ntk_prompt ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp" ;;
-  llama)  CFG=ntk_llama  ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp" ;;
+  bert)   CFG=ntk_prompt ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
+  llama)  CFG=ntk_llama  ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
   resnet) CFG=ntk_vision ; SCRIPT=vision/task_data_selection_vision.py ; DEF_DS="cifar10" ;;
   *) echo "[error] MODEL 은 bert / llama / resnet (받은 값: $MODEL)"; exit 1 ;;
 esac
 FLAG="--heldout"
 OUTBASE=./freeshap_res/data_selection
 
-# ---- 인자 분류: 숫자=seed, 그 외=dataset ----
-SEEDS=""; DATASETS=""
-for a in "$@"; do
-  case "$a" in
-    [0-9]*) SEEDS="$SEEDS $a" ;;
-    *)      DATASETS="$DATASETS $a" ;;
-  esac
-done
 SEEDS="${SEEDS:-2024 2025 2026}"
 DATASETS="${DATASETS:-$DEF_DS}"
 
@@ -60,14 +62,24 @@ for S in $SEEDS; do
     # ---- dataset 별 val_sample_num / num_train (full-size 규약) ----
     case "$D" in
       sst2) V=872  ; ND=$N    ;;
-      mrpc) V=408  ; ND=3668  ;;   # train split 전체가 3668
-      rte)  V=277  ; ND=2490  ;;   # train split 전체가 2490
+      mrpc) V=408  ; ND=3000  ;;   # FIXED_SPLIT: train 3000 + held-out 668 (예전 in-sample 은 3668)
+      rte)  V=277  ; ND=1500  ;;   # FIXED_SPLIT: train 1500 + held-out 990 (예전 in-sample 은 2490)
       *)    V=1000 ; ND=$N    ;;
     esac
 
+    # ---- held-out NTK 블록이 없으면 이 (dataset, seed) 통째로 건너뛴다 ----
+    #   (없는 채로 돌리면 작업마다 모델을 로드한 뒤에야 FileNotFoundError 로 죽어 시간을 버린다)
     case "$D" in
-      rte|mrpc) echo "  [skip] $D: train 전체를 써서 held-out 을 뗄 수 없음"; continue ;;
+      mr)   HO_TAG="ho1066ts42" ;;    # MR 은 공식 test split 1066 개
+      rte)  HO_TAG="ho990s42"   ;;
+      mrpc) HO_TAG="ho668s42"   ;;
+      *)    HO_TAG="ho1000s42"  ;;
     esac
+    HO_NTK=./freeshap_res/ntk_heldout/$D/${MODEL}_seed${S}_num${ND}_${HO_TAG}_signFalse.pkl
+    if [ ! -f "$HO_NTK" ]; then
+      echo "  [no-ntk] $MODEL $D seed$S: held-out 블록 없음 -> 먼저  sh n07_heldout_ntk.sh $MODEL $D $S"
+      continue
+    fi
 
     echo "################ $MODEL $D (n=$ND, val=$V) seed=$S  [held-out] ################"
 

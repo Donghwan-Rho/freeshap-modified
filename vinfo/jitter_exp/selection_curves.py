@@ -52,7 +52,8 @@ COMBOS = [("bert", ds, n) for ds, ns in [
                                           ("sst2", 2000), ("mnli", 2000), ("qqp", 2000),
                                           ("mr", 2000), ("ag_news", 2000), ("rte", 2000),
                                           ("mrpc", 2000)]] + \
-         [("resnet", "cifar10", 5000), ("resnet", "cifar10", 2000)]
+         [("resnet", "cifar10", 5000), ("resnet", "cifar10", 2000)] + \
+         [(m, ds, n) for m in ("bert", "llama") for ds, n in (("rte", 1500), ("mrpc", 3000))]  # held-out 프로토콜의 RTE/MRPC
 
 
 def prefix_of(model, ds, n):

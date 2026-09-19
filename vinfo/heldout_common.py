@@ -35,10 +35,42 @@ HO_SPLIT = {"mr": "test"}
 
 # 데이터셋별 기본 크기 (여기 없으면 HO_SIZE_DEFAULT).
 #   MR 은 test split(1066) 을 통째로 쓴다 — FreeShap 논문이 쓴 그 집합이다.
-HO_SIZE_BY_DS = {"mr": 1066}
+#   RTE/MRPC 는 아래 FIXED_SPLIT 의 held-out 크기.
+HO_SIZE_BY_DS = {"mr": 1066, "rte": 990, "mrpc": 668}
 
 # train split 전체를 이미 소진해 held-out 을 뗄 수 없는 조합 (num_train_dp 기준)
+#   -> 이 n 으로는 불가. 대신 아래 FIXED_SPLIT 의 n 으로 다시 만든다.
 NO_ROOM = {("rte", 2490), ("mrpc", 3668)}
+
+# train 을 전부 쓰던 데이터셋: held-out 을 **먼저** seed 42 로 고정하고 train = 나머지 전부.
+#   (n_train, n_heldout), 합이 train split 크기와 같아야 한다.
+#   train 도 seed 와 무관하게 고정되고, seed 는 TMC 순열(과 순서)만 바꾼다 — 예전 RTE/MRPC 와 같은 구조.
+#   n_train 은 기존 캠페인의 num 값(rte 1000/2000/2490, mrpc 1000/2000/3668)과 겹치지 않게 골랐다.
+FIXED_SPLIT = {"rte": (1500, 990), "mrpc": (3000, 668)}
+FULL_NUM = {"rte": 2490, "mrpc": 3668}          # train split 전체 크기 (그 외 데이터셋은 5000 사용)
+
+
+def num_of(dataset_name, protocol="heldout", default=5000):
+    """selection 결과 파일명의 num 값.
+    heldout 프로토콜에서 RTE/MRPC 는 FIXED_SPLIT 의 n_train, 그 외/예전 결과는 FULL_NUM."""
+    if protocol == "heldout" and dataset_name in FIXED_SPLIT:
+        return FIXED_SPLIT[dataset_name][0]
+    return FULL_NUM.get(dataset_name, default)
+
+
+def fixed_heldout(dataset_name, pool_size, ho_seed=HO_SEED_DEFAULT):
+    """FIXED_SPLIT 데이터셋의 held-out 인덱스 (train split 전체에서 seed 42 로 추출, 정렬)."""
+    n_tr, n_ho = FIXED_SPLIT[dataset_name]
+    if n_tr + n_ho != pool_size:
+        raise ValueError(f"{dataset_name}: FIXED_SPLIT {n_tr}+{n_ho} != train split {pool_size}")
+    idx = np.sort(np.random.default_rng(ho_seed).choice(pool_size, n_ho, replace=False))
+    return [int(i) for i in idx]
+
+
+def fixed_train_pool(dataset_name, pool_size, ho_seed=HO_SEED_DEFAULT):
+    """FIXED_SPLIT 데이터셋의 train 후보 = held-out 을 뺀 나머지 (정렬). task_ntk --exclude_heldout 가 쓴다."""
+    H = set(fixed_heldout(dataset_name, pool_size, ho_seed))
+    return [i for i in range(pool_size) if i not in H]
 
 
 def ho_split_of(dataset_name):
@@ -97,6 +129,9 @@ def pick_heldout(root, dataset_name, model_name, num, val, pool_size,
     pool_size : split="train" 이면 train split 크기, "test" 면 test split 크기.
     """
     split = split or ho_split_of(dataset_name)
+    if dataset_name in FIXED_SPLIT and split == "train":
+        # held-out 이 먼저 고정된 데이터셋: seed 합집합과 무관하게 항상 같은 집합
+        return fixed_heldout(dataset_name, pool_size, ho_seed), split
     if split == "test":
         # 공식 test split 은 학습에 쓰인 적이 없으므로 통째로 쓴다 (크면 size 개만).
         idx = np.arange(pool_size)

@@ -25,22 +25,25 @@
 # 끝나면 2단계:  MODE=heldout sh n06_selection_eval.sh
 # ============================================================
 MODEL=${MODEL:-bert}
+# ---- 인자 분류: 숫자=seed, bert/llama/resnet=모델, 그 외=dataset ----
+#   (MODEL=llama 환경변수 대신 'sh n06_selection_eval.sh llama' 처럼 써도 되게)
+SEEDS=""; DATASETS=""
+for a in "$@"; do
+  case "$a" in
+    [0-9]*)             SEEDS="$SEEDS $a" ;;
+    bert|llama|resnet)  MODEL="$a" ;;
+    *)                  DATASETS="$DATASETS $a" ;;
+  esac
+done
 N=${N:-5000}
 
 case "$MODEL" in
-  bert)   CFG=ntk_prompt ; SCRIPT=task_ntk_heldout.py               ; DEF_DS="sst2 mnli ag_news mr qqp" ;;
-  llama)  CFG=ntk_llama  ; SCRIPT=task_ntk_heldout.py               ; DEF_DS="sst2 mnli ag_news mr qqp" ;;
+  bert)   CFG=ntk_prompt ; SCRIPT=task_ntk_heldout.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
+  llama)  CFG=ntk_llama  ; SCRIPT=task_ntk_heldout.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
   resnet) CFG=ntk_vision ; SCRIPT=vision/task_ntk_heldout_vision.py ; DEF_DS="cifar10" ;;
   *) echo "[error] MODEL 은 bert / llama / resnet (받은 값: $MODEL)"; exit 1 ;;
 esac
 
-SEEDS=""; DATASETS=""
-for a in "$@"; do
-  case "$a" in
-    [0-9]*) SEEDS="$SEEDS $a" ;;
-    *)      DATASETS="$DATASETS $a" ;;
-  esac
-done
 SEEDS="${SEEDS:-2024 2025 2026}"
 DATASETS="${DATASETS:-$DEF_DS}"
 
@@ -50,26 +53,25 @@ echo "[cfg] MODEL=$MODEL ($CFG)  n=$N  seeds:$SEEDS  datasets:$DATASETS"
 
 for S in $SEEDS; do
   for D in $DATASETS; do
+    # ---- 데이터셋별 val / n / held-out 태그 ----
+    #   RTE/MRPC 는 train 을 전부 쓰던 데이터셋이라 held-out 을 먼저 고정하고 train = 나머지
+    #   (heldout_common.FIXED_SPLIT: rte 1500+990, mrpc 3000+668). 그 n 의 NTK 캐시가
+    #   task_ntk.py --exclude_heldout 로 먼저 만들어져 있어야 한다 (n08_split_shapley.sh).
     case "$D" in
-      rte|mrpc) echo "[skip] $D: train split 전체를 써서 held-out 을 뗄 수 없음"; continue ;;
+      sst2) V=872  ; ND=$N   ; TAG="ho1000s42"  ;;
+      mr)   V=1000 ; ND=$N   ; TAG="ho1066ts42" ;;   # 공식 test split 1066 개
+      rte)  V=277  ; ND=1500 ; TAG="ho990s42"   ;;
+      mrpc) V=408  ; ND=3000 ; TAG="ho668s42"   ;;
+      *)    V=1000 ; ND=$N   ; TAG="ho1000s42"  ;;
     esac
-    case "$D" in
-      sst2) V=872 ;;
-      *)    V=1000 ;;
-    esac
-    # held-out 태그: MR 만 test split 1066 개, 나머지는 train 에서 1000 개
-    case "$D" in
-      mr) TAG="ho1066ts42" ;;
-      *)  TAG="ho1000s42"  ;;
-    esac
-    OUT=./freeshap_res/ntk_heldout/$D/${MODEL}_seed${S}_num${N}_${TAG}_signFalse.pkl
+    OUT=./freeshap_res/ntk_heldout/$D/${MODEL}_seed${S}_num${ND}_${TAG}_signFalse.pkl
     if [ -f "$OUT" ]; then
       echo "[skip] $MODEL $D seed$S  ($OUT)"
       continue
     fi
-    echo "################ held-out NTK: $MODEL $D (n=$N, val=$V) seed=$S ################"
+    echo "################ held-out NTK: $MODEL $D (n=$ND, val=$V) seed=$S ################"
     run python $SCRIPT --config $CFG --dataset_name $D --seed $S \
-      --num_train_dp $N --val_sample_num $V --out_root ./freeshap_res
+      --num_train_dp $ND --val_sample_num $V --out_root ./freeshap_res
   done
 done
 echo "[done] held-out NTK ($MODEL / seeds:$SEEDS / datasets:$DATASETS)"

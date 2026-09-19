@@ -8,7 +8,9 @@ eigen 은 λ=1e-2, eigeps=1e-8 고정 (구형 파일명 eig{r}_lam1e-02, eigeps 
 import os, re, glob
 
 DS   = ["sst2", "mr", "qqp", "mnli", "ag_news", "rte", "mrpc"]
-NUM  = {"rte": 2490, "mrpc": 3668}          # 그 외 5000
+NUM  = {"rte": 2490, "mrpc": 3668}          # 그 외 5000 (full-size: 시간·in-sample)
+# held-out 프로토콜(data_selection)의 selection 결과는 RTE/MRPC 를 쪼개 써서 n 이 다르다
+NUM_SEL = {"rte": 1500, "mrpc": 3000}       # heldout_common.FIXED_SPLIT
 VAL  = {"sst2": 872, "mrpc": 408, "rte": 277}  # 그 외 1000
 SEEDS = [2024, 2025, 2026]
 RANKS = [1, 5, 10, 15, 20, 25, 30]
@@ -52,14 +54,20 @@ def a6000_time(paths):
             return sec
     return None
 
+def _num(ds, base):
+    """폴더에 맞는 n: held-out selection 폴더면 NUM_SEL, 그 외(시간 폴더·in-sample)는 full-size."""
+    if base == BASE and SELECTION_DIR == "data_selection":
+        return NUM_SEL.get(ds, 5000)
+    return NUM.get(ds, 5000)
+
 def inv_paths(ds, s, base=None):
-    n, v = NUM.get(ds, 5000), VAL.get(ds, 1000)
     base = BASE if base is None else base
+    n, v = _num(ds, base), VAL.get(ds, 1000)
     return [f"{base}/{ds}/inv/predictions/bert_seed{s}_num{n}_val{v}_lam1e-06_signFalse_earlystopTrue_tmc500_predictions.txt"]
 
 def eigen_paths(ds, s, r, base=None):
-    n, v = NUM.get(ds, 5000), VAL.get(ds, 1000)
     base = BASE if base is None else base
+    n, v = _num(ds, base), VAL.get(ds, 1000)
     head = f"{base}/{ds}/eigen/predictions/bert_seed{s}_num{n}_val{v}"
     tail = "_signFalse_earlystopTrue_tmc500_predictions.txt"
     return [  # 신형식(eig{r}.0, eigeps 포함) -> 신형식(eig{r}) -> 구형식(lam, eigeps 없음)

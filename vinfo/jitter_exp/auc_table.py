@@ -50,7 +50,12 @@ import collect_wld_curves as wld_src   # inv_file / eigen_file / det_rates (pkl 
 
 SEEDS = (2024, 2025, 2026)
 RANKS = (1, 5, 10, 15, 20, 25, 30)
-NUM = {"rte": 2490, "mrpc": 3668}
+# train 크기. removal/wld 는 항상 full-size(rte 2490 / mrpc 3668).
+# selection 은 held-out 프로토콜(data_selection)에서 RTE/MRPC 를 쪼개 쓰므로 n 이 다르다
+#   (heldout_common.FIXED_SPLIT: rte 1500, mrpc 3000). in-sample 폴더면 full-size.
+NUM = {"rte": 2490, "mrpc": 3668}                      # full-size (removal / wld / in-sample)
+NUM_SEL = ({"rte": 1500, "mrpc": 3000}
+           if os.environ.get("SELECTION_DIR", "data_selection") == "data_selection" else NUM)
 VAL = {"sst2": 872, "mrpc": 408, "rte": 277}
 PANELS = [("sst2", "SST-2"), ("mnli", "MNLI"), ("ag_news", "AG News"),
           ("mr", "MR"), ("qqp", "QQP"), ("rte", "RTE"), ("mrpc", "MRPC")]
@@ -121,7 +126,8 @@ def _acc_curve(path, task):
 
 def _acc_candidates(task, model, ds, s, rank):
     """존재할 수 있는 파일명 변형들 (신형 -> 구형 순)."""
-    base, n, v = BASE[task], NUM.get(ds, 5000), VAL.get(ds, 1000)
+    base, v = BASE[task], VAL.get(ds, 1000)
+    n = (NUM_SEL if task == "selection" else NUM).get(ds, 5000)
     tail = "_signFalse_earlystopTrue_tmc500_predictions.txt"
     if rank is None:
         return [f"{base}/{ds}/inv/predictions/{model}_seed{s}_num{n}_val{v}_lam1e-06{tail}"]

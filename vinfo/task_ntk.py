@@ -46,6 +46,10 @@ def parse_args():
                         help="Number of validation samples. If None, use entire validation set.")
     parser.add_argument("--config", type=str, default="ntk_prompt",
                         help="YAML config name without .yaml extension (e.g., ntk_prompt, ntk_llama)")
+    parser.add_argument("--exclude_heldout", action="store_true",
+                        help="train 후보에서 고정 held-out(heldout_common.FIXED_SPLIT, seed 42)을 먼저 뺀다. "
+                             "RTE/MRPC 처럼 train 을 전부 쓰던 데이터셋용 — held-out 을 먼저 고정하고 "
+                             "train = 나머지 전부(num_train_dp 와 같아야 함).")
     return parser.parse_args()
 
 
@@ -105,6 +109,17 @@ def main():
     print(f'[info] Total train dataset size: {total_train_size}')
     
     train_data = train_data.map(lambda example, idx: {'idx': idx}, with_indices=True)
+    if args.exclude_heldout:
+        # held-out 을 먼저 고정하고 그 나머지만 후보로 (seed 는 순서만 섞는다)
+        import heldout_common as HO
+        if dataset_name not in HO.FIXED_SPLIT:
+            raise SystemExit(f"[stop] --exclude_heldout 은 FIXED_SPLIT 데이터셋만 지원: {list(HO.FIXED_SPLIT)}")
+        n_tr, n_ho = HO.FIXED_SPLIT[dataset_name]
+        if num_train_dp != n_tr:
+            raise SystemExit(f"[stop] {dataset_name}: --num_train_dp 는 FIXED_SPLIT 의 {n_tr} 이어야 한다 (받은 값 {num_train_dp})")
+        keep = HO.fixed_train_pool(dataset_name, train_data.num_rows)
+        train_data = train_data.select(keep)
+        print(f"[info] held-out {n_ho} 개(seed {HO.HO_SEED_DEFAULT}) 제외 -> train 후보 {train_data.num_rows} 개 (전부 사용)")
     train_data = train_data.shuffle(seed).select(range(min(train_data.num_rows, num_train_dp)))
     sampled_idx = train_data['idx']
     print(f'[info] Sampled train data: {len(sampled_idx)} samples (from {total_train_size})')
