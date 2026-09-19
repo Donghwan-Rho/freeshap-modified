@@ -22,7 +22,7 @@
 #   MODEL=llama  CUDA_VISIBLE_DEVICES=<빈GPU> sh n07_heldout_ntk.sh # (나중에)
 #   DRY=1 sh n07_heldout_ntk.sh                                      # 명령만 출력
 #
-# 끝나면 2단계:  MODE=heldout sh n06_selection_eval.sh
+# 끝나면:  rte/mrpc 는 n08_split_shapley.sh 로 Shapley 를 만든 뒤  ->  n06_selection_eval.sh
 # ============================================================
 MODEL=${MODEL:-bert}
 # ---- 인자 분류: 숫자=seed, bert/llama/resnet=모델, 그 외=dataset ----
@@ -69,10 +69,28 @@ for S in $SEEDS; do
       echo "[skip] $MODEL $D seed$S  ($OUT)"
       continue
     fi
+
+    # ---- 기본 NTK 캐시(train+val) 확인: held-out 블록은 이 캐시의 train subset 을 그대로 쓴다 ----
+    #   rte/mrpc 는 새 n(FIXED_SPLIT) 이라 캐시가 없을 수 있다 -> 여기서 task_ntk --exclude_heldout 로 만든다.
+    #   그 외 데이터셋은 원래 캠페인의 캐시가 있어야 한다 (held-out 정의에 3 seed 의 train 합집합이 필요).
+    BASE_NTK=./freeshap_res/ntk/$D/${MODEL}_seed${S}_num${ND}_val${V}_signFalse.pkl
+    if [ ! -f "$BASE_NTK" ]; then
+      case "$D" in
+        rte|mrpc)
+          echo "  [run] base ntk 먼저 생성 (--exclude_heldout): $BASE_NTK"
+          run python task_ntk.py --config $CFG --dataset_name $D --seed $S \
+            --num_train_dp $ND --val_sample_num $V --exclude_heldout
+          if [ ! -f "$BASE_NTK" ] && [ "${DRY:-0}" != "1" ]; then
+            echo "  [fail] base ntk 생성 실패 -> $D seed$S 건너뜀"; continue
+          fi ;;
+        *)
+          echo "  [no-base-ntk] $BASE_NTK 없음 -> 원래 캠페인의 task_ntk 결과(3 seed 전부)가 먼저 필요"; continue ;;
+      esac
+    fi
     echo "################ held-out NTK: $MODEL $D (n=$ND, val=$V) seed=$S ################"
     run python $SCRIPT --config $CFG --dataset_name $D --seed $S \
       --num_train_dp $ND --val_sample_num $V --out_root ./freeshap_res
   done
 done
 echo "[done] held-out NTK ($MODEL / seeds:$SEEDS / datasets:$DATASETS)"
-echo "다음: MODE=heldout sh n06_selection_eval.sh   (MODEL=$MODEL)"
+echo "다음: sh n08_split_shapley.sh $MODEL   (rte/mrpc 의 Shapley, NTK 는 건너뜀)  ->  sh n06_selection_eval.sh $MODEL"
