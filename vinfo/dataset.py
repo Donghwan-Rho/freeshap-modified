@@ -598,6 +598,19 @@ class FastListDataset(Dataset, InitYAMLObject):
         else:
           self.dev_data = TransformerDataset(data, self.tokenizer, max_length=self.args['seq_len'])
       return SubsetDataset(self.dev_data, idx)
+    elif split == "test":
+      # held-out 평가용 공식 test split (dev=val 과 다른 집합).
+      # test 라벨이 공개된 데이터셋에서만 쓴다 (MR 등). 나머지는 train 에서 떼므로 split="train".
+      if self.test_data is None:
+        data = list(self._load_data(TEST_STR))
+        if self.prompt:
+          self.test_data = PropmtDataset(data, self.tokenizer, self.template, self.label_word_list,
+                                         max_length=self.args['seq_len'], first_sent_limit=self.first_sent_limit,
+                                         other_sent_limit=self.other_sent_limit)
+        else:
+          self.test_data = TransformerDataset(data, self.tokenizer, max_length=self.args['seq_len'])
+      return SubsetDataset(self.test_data, idx)
+    raise ValueError(f"unknown split={split!r} (train / val / test)")
 
   def get_idx_dataset_large(self, idx, split="train"):
     """
