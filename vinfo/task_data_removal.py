@@ -377,8 +377,10 @@ def main():
 
     def _block(f, mode, lam):
         f.write(f"{mode} mode lambda={lam:.0e}\n")
-        f.write(f"top_removal:\n{curves[(mode, 'q4')]}\n")
-        f.write(f"bottom_removal:\n{curves[(mode, 'q0')]}\n")
+        # 곡선 키는 위 루프의 전략 이름(top / bottom / random)과 같아야 한다.
+        # (예전 q4/q0 이름이 남아 있어 KeyError 로 헤더만 쓰고 죽던 버그 수정)
+        f.write(f"top_removal:\n{curves[(mode, 'top')]}\n")
+        f.write(f"bottom_removal:\n{curves[(mode, 'bottom')]}\n")
         f.write(f"random:\n{curves[(mode, 'random')]}\n\n")
 
     with open(out_path, 'w') as f:
