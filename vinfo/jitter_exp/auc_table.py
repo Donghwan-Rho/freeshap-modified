@@ -67,7 +67,13 @@ def panels_for(model):
 # 이 파일은 jitter_exp/ 에 있으므로 그 부모가 vinfo 루트.
 # 노트북이 reports_*/ 안에서 실행돼도 CWD 와 무관하게 결과를 찾도록 절대경로로 잡는다.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = {"selection": os.path.join(ROOT, "freeshap_res", "data_selection"),
+# selection 결과 폴더는 프로토콜에 따라 갈린다 (removal/wld 는 영향 없음).
+#   data_selection           : held-out 평가 (논문 본문, 기본값)
+#   data_selection_insample  : 점수 계산에 쓴 val 에서 그대로 평가한 예전 결과
+# 환경변수로 전환한다:  SELECTION_DIR=data_selection_insample python ...
+#   (노트북에서는 os.environ["SELECTION_DIR"]=... 후 importlib.reload(auc_table))
+SELECTION_DIR = os.environ.get("SELECTION_DIR", "data_selection")
+BASE = {"selection": os.path.join(ROOT, "freeshap_res", SELECTION_DIR),
         "removal": os.path.join(ROOT, "freeshap_res", "data_removing")}
 FIELD = {"selection": r"top", "removal": r"top[ _]removal[^\n]*"}
 HIGHER_IS_BETTER = {"selection": True, "removal": False, "wld": True}

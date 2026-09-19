@@ -22,7 +22,9 @@
 #   landmark 재료인 inv SV 는 --landmark_sv_root (기본 ./freeshap_res) 에서 읽는다.
 #     -> 해당 (seed, dataset) 의 inv shapley pkl 이 없으면 그 조합을 건너뛴다.
 #
-# 세팅: num_train=2000 (bert/llama/resnet 공통; NUM=5000 으로 덮어쓰기 가능), nyslam=1e-2, nyseps=1e-8 고정, tmc=500.
+# 세팅: num_train — bert/llama 기본 5000 (full-size 규약: rte 2490 / mrpc 3668),
+#   resnet 기본 2000. NUM=2000 처럼 환경변수로 덮어쓸 수 있다 (그 경우 전 데이터셋 동일 N).
+#   nyslam=1e-2, nyseps=1e-8 고정, tmc=500.
 #   (이 모드에서 --nyseps auto 는 금지 — auto 는 랜덤 subset 으로 σ_min(W) 를 추정해
 #    실제 landmark 와 어긋난다.)
 #
@@ -37,7 +39,8 @@
 #   MODES="q1 q3" sh jitter_exp/nys_landmark.sh 2024     # 분위 두 개만
 #   RANKS="1 30" sh jitter_exp/nys_landmark.sh 2024 rte  # 빠른 점검
 #   DO_REMOVAL=1 DO_WLD=1 sh jitter_exp/nys_landmark.sh  # 나머지 task 도
-#   MODEL=llama sh jitter_exp/nys_landmark.sh            # llama 로
+#   MODEL=llama sh jitter_exp/nys_landmark.sh            # llama, n=5000(full-size)
+#   NUM=2000 sh jitter_exp/nys_landmark.sh               # 예전 n=2000 판
 # 결과 파일 있으면 스킵 (증분 안전).
 # ============================================================
 cd /extdata1/donghwan/freeshap/vinfo
@@ -56,8 +59,8 @@ DO_WLD=${DO_WLD:-0}
 #   vision(resnet) 은 별도 스크립트(vision/task_*_vision.py)를 쓴다.
 MODEL=${MODEL:-bert}
 case "$MODEL" in
-  bert)   CFG=ntk_prompt ; PFX="."        ; SFX=""        ; DEF_DS="qqp mr rte sst2 mnli ag_news mrpc" ; DEF_N=2000 ;;
-  llama)  CFG=ntk_llama  ; PFX="."        ; SFX=""        ; DEF_DS="qqp mr rte sst2 mnli ag_news mrpc" ; DEF_N=2000 ;;
+  bert)   CFG=ntk_prompt ; PFX="."        ; SFX=""        ; DEF_DS="sst2 qqp mr rte mnli ag_news mrpc" ; DEF_N=5000 ;;
+  llama)  CFG=ntk_llama  ; PFX="."        ; SFX=""        ; DEF_DS="sst2 qqp mr rte sst2 mnli ag_news mrpc" ; DEF_N=5000 ;;
   resnet) CFG=ntk_vision ; PFX="./vision" ; SFX="_vision" ; DEF_DS="cifar10"                           ; DEF_N=2000 ;;
   *) echo "[error] MODEL 은 bert / llama / resnet 이어야 합니다 (받은 값: $MODEL)"; exit 1 ;;
 esac
@@ -91,8 +94,17 @@ for S in $SEEDS; do
       *)      V=1000 ;;
     esac
 
+    # ---- dataset 별 num_train ----
+    #   full-size(NUM=5000) 규약은 다른 캠페인과 동일하게 rte 2490 / mrpc 3668 이다
+    #   (그 둘은 train split 자체가 5000 보다 작다). NUM 이 5000 이 아니면 그대로 쓴다.
+    case "$NUM:$D" in
+      5000:rte)  ND=2490 ;;
+      5000:mrpc) ND=3668 ;;
+      *)         ND=$NUM ;;
+    esac
+
     # ---- landmark 재료 확인: 같은 seed 의 inv shapley 가 없으면 이 (seed,dataset) 건너뜀 ----
-    INV_SV=$SV_ROOT/shapley/$D/inv/${MODEL}_seed${S}_num${NUM}_val${V}_lam1e-06_signFalse_earlystopTrue_tmc500.pkl
+    INV_SV=$SV_ROOT/shapley/$D/inv/${MODEL}_seed${S}_num${ND}_val${V}_lam1e-06_signFalse_earlystopTrue_tmc500.pkl
     if [ ! -f "$INV_SV" ]; then
       echo "[skip-ds] $D seed$S — inv SV 없음 ($INV_SV). 해당 모델의 inv 를 먼저 돌리세요."
       continue
@@ -102,13 +114,13 @@ for S in $SEEDS; do
       for MODE in $MODES; do        # ★ rank 안에서 q4 -> q0 순 (rank 단위로 바로 비교)
         TAG=nys$MODE               # q0..q4 -> nysq0..nysq4
         OUT=./jitter_exp/nys_landmark_${MODE}_res   # 모델은 파일명 접두로 구분 (bert_/llama_)
-        echo "[$MODEL/$MODE] $D (val=$V) seed$S rank=${R}%"
+        echo "[$MODEL/$MODE] $D (n=$ND, val=$V) seed$S rank=${R}%"
 
         # ---- 결과 파일 경로 (이미 있으면 해당 task 스킵) ----
         # shapley/selection/removal 파일명: _{TAG}{R}.0_nyslam..._invlam... (신형)
         # wrong-label 파일명: _{TAG}{R}_lam..._poison10_ps{seed} (wld 고유 형식)
-        STEM="${MODEL}_seed${S}_num${NUM}_val${V}_${TAG}${R}.0_nyslam1e-02_nyseps1e-8_invlam1e-06_cholesky_float32_signFalse_earlystopTrue_tmc500"
-        WSTEM="${MODEL}_seed${S}_num${NUM}_val${V}_${TAG}${R}_lam1e-02_nyseps1e-8_cholesky_float32_signFalse_earlystopTrue_tmc500_poison10_ps${S}"
+        STEM="${MODEL}_seed${S}_num${ND}_val${V}_${TAG}${R}.0_nyslam1e-02_nyseps1e-8_invlam1e-06_cholesky_float32_signFalse_earlystopTrue_tmc500"
+        WSTEM="${MODEL}_seed${S}_num${ND}_val${V}_${TAG}${R}_lam1e-02_nyseps1e-8_cholesky_float32_signFalse_earlystopTrue_tmc500_poison10_ps${S}"
         SV_PKL=$OUT/shapley/$D/nystrom_${MODE}/${STEM}.pkl
         SEL_TXT=$OUT/data_selection/$D/nystrom_${MODE}/indices/${STEM}_indices.txt
         REM_TXT=$OUT/data_removing/$D/nystrom_${MODE}/predictions/${STEM}_predictions.txt
@@ -119,7 +131,7 @@ for S in $SEEDS; do
           if [ -f "$SV_PKL" ]; then echo "  [skip] shapley  ($SV_PKL)"
           else
             $PY $PFX/task_shapley$SFX.py --config $CFG --seed $S --dataset_name $D \
-              --num_train_dp $NUM --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
+              --num_train_dp $ND --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
               --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
               --out_root $OUT --landmark_sv_root $SV_ROOT
           fi
@@ -129,7 +141,7 @@ for S in $SEEDS; do
           elif [ -f "$SEL_TXT" ]; then echo "  [skip] selection ($SEL_TXT)"
           else
             $PY $PFX/task_data_selection$SFX.py --config $CFG --seed $S --dataset_name $D \
-              --num_train_dp $NUM --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
+              --num_train_dp $ND --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
               --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
               --out_root $OUT --landmark_sv_root $SV_ROOT
           fi
@@ -139,7 +151,7 @@ for S in $SEEDS; do
           elif [ -f "$REM_TXT" ]; then echo "  [skip] removal  ($REM_TXT)"
           else
             $PY $PFX/task_data_removal$SFX.py --config $CFG --seed $S --dataset_name $D \
-              --num_train_dp $NUM --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
+              --num_train_dp $ND --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
               --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --tmc_iter 500 \
               --out_root $OUT --landmark_sv_root $SV_ROOT --num_train_removed_list $REM
           fi
@@ -148,7 +160,7 @@ for S in $SEEDS; do
           if [ -f "$WLD_TXT" ] && [ -f "$WLD_PKL" ]; then echo "  [skip] wrong-label ($WLD_TXT)"
           else
             $PY $PFX/task_wrong_label_detection$SFX.py --config $CFG --seed $S --dataset_name $D \
-              --num_train_dp $NUM --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
+              --num_train_dp $ND --val_sample_num $V --approximate nystrom_$MODE --nystrom_d $R \
               --inv_lambda_ 1e-6 --nystrom_lambda_ 1e-2 --nyseps 1e-8 --poison_pct 10 --tmc_iter 500 \
               --out_root $OUT --landmark_sv_root $SV_ROOT
           fi

@@ -1,57 +1,45 @@
 # ============================================================
-# freeshap_res/ — original FreeShap outputs + claude_research/
+# 이 저장소는 "실험 코드"만 공유한다.
+#   - 커널 / Shapley / 예측 / 그림 같은 산출물은 서버마다 그 서버에서 만든다.
+#   - 따라서 결과 디렉터리는 통째로 무시하고, 코드(py/sh/yaml/md)만 추적한다.
+# 새 결과 폴더를 만들면 아래 "결과 디렉터리"에 한 줄 추가할 것.
 # ============================================================
-# Default: ignore everything under freeshap_res/
-vinfo/freeshap_res/*
 
-# Keep small analysis folders
-!vinfo/freeshap_res/feature_concentration/
-!vinfo/freeshap_res/feature_concentration/**
-!vinfo/freeshap_res/label_concentration/
-!vinfo/freeshap_res/label_concentration/**
+# ---- 결과 디렉터리 (통째로) ----
+vinfo/freeshap_res/
+vinfo/jitter_exp/res/
+# nys_pinv_res, nys_lev_res, nys_landmark_q0~q4_res
+vinfo/jitter_exp/nys_*_res/
+# reports_{bert,llama,resnet}_eigen_pinv_lev
+vinfo/jitter_exp/reports_*/
+vinfo/jitter_exp/coalition_spike/
+vinfo/nys_pseudo/
+cache/
 
-# Keep ntk/ analysis (eigenvalue png/txt) — *.pkl ignored below
-!vinfo/freeshap_res/ntk/
-!vinfo/freeshap_res/ntk/**
+# ---- 데이터셋 캐시 ----
+vinfo/datasets_vision/
 
-# Keep the bulky-folder analysis files (ipynb/txt/png/pdf) — only *.pkl is ignored
-!vinfo/freeshap_res/data_removing/
-!vinfo/freeshap_res/data_removing/**
-!vinfo/freeshap_res/data_selection/
-!vinfo/freeshap_res/data_selection/**
-!vinfo/freeshap_res/previous_data_selection/
-!vinfo/freeshap_res/previous_data_selection/**
-!vinfo/freeshap_res/wrong_label_detection/
-!vinfo/freeshap_res/wrong_label_detection/**
-
-# Keep claude_research/ (analysis + docs + reports + code)
-!vinfo/freeshap_res/claude_research/
-!vinfo/freeshap_res/claude_research/**
-
-# Inside claude_research/, re-ignore bulky data + run-time artifacts
-vinfo/freeshap_res/claude_research/data_selection_test/
-vinfo/freeshap_res/claude_research/imbalance_ntk/
-vinfo/freeshap_res/claude_research/state/iteration_*/eig_cache/
-vinfo/freeshap_res/claude_research/state/iteration_*/labels_cache/
-vinfo/freeshap_res/claude_research/experiments/*.log
-vinfo/freeshap_res/claude_research/experiments/*.pid
-vinfo/freeshap_res/claude_research/experiments/__pycache__/
-vinfo/freeshap_res/claude_research/reports/*_img/
-
-# Large analysis intermediates (regenerable via build_grand_df.py)
-vinfo/freeshap_res/claude_research/state/iteration_*/grand_df.csv
-
-# Fonts (system-installed or downloaded separately)
-vinfo/freeshap_res/claude_research/scripts/fonts/*.ttf
-
-# pkl files always ignored (catches shapley/*.pkl, ntk/*.pkl, etc.)
-**/*.pkl
-# notebooks: work locally on this server only, never commit (also catches *.ipynb.ipynb)
-**/*.ipynb
+# ---- 산출물 확장자 (어디에 있든) ----
+*.pkl
+*.npz
+*.pt
+*.pth
+*.pdf
+*.png
+*.jpg
+*.svg
+*.ipynb
 .ipynb_checkpoints/
-# figures/reports: generate locally on this server only, never commit
-**/*.pdf
-**/*.png
+
+# ---- 실행 부산물 ----
+*.log
+*.pid
+*.out
 __pycache__/
 *.pyc
-vinfo/datasets_vision/
+.DS_Store
+
+# ---- 예외 ----
+#   git 은 상위 디렉터리가 제외되면 그 안의 파일을 되살릴 수 없다.
+#   그래서 코드는 "무시 목록에 안 넣는" 방식으로 지킨다 (py/sh/yaml/md 는 애초에 규칙이 없음).
+!requirements.txt

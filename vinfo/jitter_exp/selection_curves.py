@@ -31,7 +31,9 @@ import re
 # 이 파일은 jitter_exp/ 에 있으므로 그 부모가 vinfo 루트.
 # 노트북이 reports_*/ 안에서 실행돼도 CWD 와 무관하게 결과를 찾도록 절대경로로 잡는다.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = os.path.join(ROOT, "freeshap_res", "data_selection")
+# auc_table.py 와 같은 규약: SELECTION_DIR 로 held-out / in-sample 을 전환한다.
+SELECTION_DIR = os.environ.get("SELECTION_DIR", "data_selection")
+BASE = os.path.join(ROOT, "freeshap_res", SELECTION_DIR)
 SEEDS = (2024, 2025, 2026)
 RANKS = (1, 5, 10, 15, 20, 25, 30)
 VAL = {"sst2": 872, "mrpc": 408, "rte": 277}

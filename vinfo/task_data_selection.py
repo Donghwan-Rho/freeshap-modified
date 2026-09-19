@@ -15,6 +15,7 @@ from dvutils.Data_Shapley import Fast_Data_Shapley  # YAML tag 해석용
 
 import argparse
 from landmark_sv import resolve_landmark_sv   # SV 기반 Nystrom landmark (nystrom_q4/bottom)
+import heldout_common as HO
 
 
 def parse_args():
@@ -53,6 +54,18 @@ def parse_args():
     parser.add_argument("--num_train_selected_list", type=int, nargs='+',
                         default=[i for i in range(1, 101)],
                         help="List of percentages (1-100) of num_train_dp to use as training data")
+    # --- held-out 평가 (data selection 프로토콜) ---
+    #   기본(off) 이면 예전처럼 점수 계산에 쓴 val 에서 평가한다 (in-sample).
+    #   --heldout 이면 freeshap_res/ntk_heldout/ 의 블록을 읽어 train 과 겹치지 않는
+    #   고정 집합에서 평가한다. Shapley 값은 그대로 재사용한다.
+    parser.add_argument("--heldout", action="store_true",
+                        help="held-out 집합에서 평가 (task_ntk_heldout.py 를 먼저 돌려야 함)")
+    parser.add_argument("--heldout_size", type=int, default=None,
+                        help="기본값은 데이터셋별 규약 (MR=1066, 나머지=1000)")
+    parser.add_argument("--heldout_seed", type=int, default=HO.HO_SEED_DEFAULT)
+    parser.add_argument("--heldout_split", type=str, default=None,
+                        choices=["train", "test"],
+                        help="기본값은 데이터셋별 규약 (MR=test, 나머지=train)")
     parser.add_argument("--config", type=str, default="ntk_prompt",
                         help="YAML config name without .yaml extension (e.g., ntk_prompt, ntk_llama)")
     return parser.parse_args()
@@ -269,10 +282,18 @@ def main():
     print(f"[info] |train|={len(sampled_idx)}, |val|={len(sampled_val_idx)}")
 
     # ===== 2) NTK 캐시 로드 =====
-    ntk_path = (
-        f"./freeshap_res/ntk/{dataset_name}/{model_name}"
-        f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
-    )
+    #   --heldout 이면 held-out 행이 붙은 블록을 대신 읽는다 (열 = 같은 train N).
+    if args.heldout:
+        _ho_split = args.heldout_split or HO.ho_split_of(dataset_name)
+        _ho_tag = HO.ho_tag(HO.resolve_size(dataset_name, args.heldout_size),
+                            args.heldout_seed, _ho_split)
+        ntk_path = HO.heldout_ntk_path("./freeshap_res", dataset_name, model_name,
+                                       seed, num_train_dp, _ho_tag, signgd)
+    else:
+        ntk_path = (
+            f"./freeshap_res/ntk/{dataset_name}/{model_name}"
+            f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
+        )
     print(f"[info] ntk_path = {ntk_path}")
 
     with open(ntk_path, "rb") as f:
@@ -287,9 +308,17 @@ def main():
     ntk = bundle["ntk"]
     probe_model.get_cached_ntk(ntk)
 
-    # ===== 3) train/val set 구성 =====
+    # ===== 3) train / 평가 set 구성 =====
     train_set = list_dataset.get_idx_dataset(sampled_idx, split="train")
-    val_set = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
+    if args.heldout:
+        # 평가 집합만 held-out 으로 교체한다 (점수는 여전히 val 에서 매겨진 값).
+        if not np.array_equal(np.array(bundle["sampled_idx"]), sampled_idx):
+            raise RuntimeError("held-out 블록의 train subset 이 Shapley 결과와 다르다 — 중단")
+        eval_idx = [int(i) for i in bundle["heldout_idx"]]
+        val_set = list_dataset.get_idx_dataset(eval_idx, split=bundle["heldout_split"])
+        print(f"[info] held-out 평가: split={bundle['heldout_split']} |H|={len(eval_idx)}")
+    else:
+        val_set = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
     probe_model.get_train_labels(train_set)
 
     # eigen / nystrom 이면 feature 준비
@@ -311,7 +340,7 @@ def main():
     all_indices = np.arange(len(sampled_idx))
 
     # 출력 경로: freeshap_res/data_selection/{dataset}/{method}/
-    ds_base = f"{args.out_root}/data_selection/{dataset_name}"
+    ds_base = f"{HO.selection_base(args.out_root, 'heldout')}/{dataset_name}"
     setting_name = os.path.basename(shapley_path).replace('.pkl', '')
 
     # Save sorted indices (original dataset indices)

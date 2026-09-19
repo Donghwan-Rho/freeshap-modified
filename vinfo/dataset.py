@@ -332,6 +332,20 @@ class ListDataset(Dataset, InitYAMLObject):
         generator = TransformerDataset(self.dev_data, self.tokenizer, max_length=self.args['seq_len'])
       self.val_generator = Subset(generator, idxs)
       return self.val_generator
+    elif split == "test":
+      # held-out 평가용 공식 test split (dev=val 과 다른 집합).
+      # test 라벨이 공개된 데이터셋에서만 쓴다 (MR 등). 나머지는 train 에서 떼어 쓰므로
+      # split="train" 으로 충분하다.
+      if self.test_data is None:
+        self.test_data = list(self._load_data(TEST_STR))
+      if self.prompt:
+        generator = PropmtDataset(self.test_data, self.tokenizer, self.template, self.label_word_list,
+                                  max_length=self.args['seq_len'], first_sent_limit=self.first_sent_limit,
+                                  other_sent_limit=self.other_sent_limit)
+      else:
+        generator = TransformerDataset(self.test_data, self.tokenizer, max_length=self.args['seq_len'])
+      self.test_generator = Subset(generator, idxs)
+      return self.test_generator
 
   def get_idx_dataloader(self, idxs, split="train"):
     """

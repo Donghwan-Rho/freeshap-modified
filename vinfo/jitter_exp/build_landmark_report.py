@@ -184,6 +184,91 @@ def landmarks(label, d, inv, n, seed, K=None, nys_lam=1e-2):
     return None
 
 
+# ------------------------------------------------------------------ 예측(pacc)
+#   "full-data 예측" = train n 개 **전부**로 학습한 예측기의 val accuracy.
+#   SV 오차가 아니라 예측값 자체를 보는 지표라, landmark 선택이 실제 모델 성능을
+#   얼마나 바꾸는지 직접 읽힌다. compute_kernel_pred_error.py 와 같은 정의:
+#     inv    : beta = (K + 1e-6 I)^-1 Y                 -> logits = K_TN beta
+#     Nystrom: Phi = C Q Sigma^-1/2 (cutoff 1e-8), W = (Phi^T Phi + 1e-2 I)^-1 Phi^T Y
+#     eigen  : Phi = U_r sqrt(lam_r), Phi_te = K_TN U_r / sqrt(lam_r), 같은 ridge
+#   모델은 로드하지 않는다 (캐시된 NTK + 데이터셋 라벨만).
+#   검증: llama/sst2/n2000/seed2024 inv logits vs compute_kernel_pred_error.py 산출 npz
+#         -> 상대차 4.5e-05, argmax 100% 일치, accuracy 동일(0.8784).
+INVLAM_P, NYSLAM_P, EIGLAM_P, EPS_P = 1e-6, 1e-2, 1e-2, 1e-8
+_PRED_CACHE, _EIGH_CACHE = {}, {}
+
+
+def _labels_of(dataset, tr_idx, val_idx):
+    """NTK 캐시의 인덱스로 train/val 라벨을 읽는다 (task_ntk.py 의 split 규약과 동일)."""
+    if dataset == "cifar10":
+        from torchvision import datasets as _tv
+        root = f"{ROOT}/datasets_vision"
+        tr = np.array(_tv.CIFAR10(root, train=True, download=False).targets)[tr_idx]
+        va = np.array(_tv.CIFAR10(root, train=False, download=False).targets)[val_idx]
+        return tr, va
+    from datasets import load_dataset
+    spec = {"sst2": ("sst2",), "mr": ("rotten_tomatoes",), "ag_news": ("ag_news",),
+            "mnli": ("glue", "mnli"), "qqp": ("glue", "qqp"),
+            "rte": ("glue", "rte"), "mrpc": ("glue", "mrpc")}[dataset]
+    val_split = {"mnli": "validation_matched", "ag_news": "test"}.get(dataset, "validation")
+    tr = np.array(load_dataset(*spec, split="train")["label"])[tr_idx]
+    va = np.array(load_dataset(*spec, split=val_split)["label"])[val_idx]
+    return tr, va
+
+
+def pred_parts(dataset, model, seed, n, v):
+    """(K_TN, y_train, y_val). K_TN 은 kernel_norm 과 **같은 스칼라**로 정규화한다."""
+    key = (dataset, model, seed, n, v)
+    if key not in _PRED_CACHE:
+        p = f"{ROOT}/freeshap_res/ntk/{dataset}/{model}_seed{seed}_num{n}_val{v}_signFalse.pkl"
+        d = pickle.load(open(p, "rb"))
+        full = np.asarray(d["ntk"])
+        K_te = full[0, n:, :n].astype(np.float64) / float(full.mean())
+        y_tr, y_val = _labels_of(dataset, np.array(d["sampled_idx"]),
+                                 np.array(d["sampled_val_idx"]))
+        _PRED_CACHE[key] = (K_te, y_tr, y_val)
+    return _PRED_CACHE[key]
+
+
+def _onehot(y_tr, y_val):
+    return np.eye(int(max(y_tr.max(), y_val.max())) + 1)[y_tr]
+
+
+def acc_inv(K, K_te, y_tr, y_val):
+    Y = _onehot(y_tr, y_val)
+    beta = np.linalg.solve(K + INVLAM_P * np.eye(len(K)), Y)
+    return float(((K_te @ beta).argmax(1) == y_val).mean())
+
+
+def _acc_from_phi(Phi, Phi_te, Y, y_val, lam):
+    W = np.linalg.solve(Phi.T @ Phi + lam * np.eye(Phi.shape[1]), Phi.T @ Y)
+    return float(((Phi_te @ W).argmax(1) == y_val).mean())
+
+
+def acc_nystrom(K, K_te, y_tr, y_val, S):
+    """landmark 집합 S 로 만든 pinv-Nystrom 예측기의 val accuracy."""
+    W = K[np.ix_(S, S)]
+    ev, Q = np.linalg.eigh((W + W.T) / 2)
+    keep = ev > EPS_P
+    if not keep.any():
+        return np.nan
+    T = Q[:, keep] / np.sqrt(ev[keep])
+    return _acc_from_phi(K[:, S] @ T, K_te[:, S] @ T, _onehot(y_tr, y_val), y_val, NYSLAM_P)
+
+
+def acc_eigen(dataset, model, seed, n, v, K, K_te, y_tr, y_val, r):
+    """top-r 고유쌍으로 만든 eigen 예측기의 val accuracy (seed 당 eigh 1회 캐시)."""
+    key = (dataset, model, seed, n, v)
+    if key not in _EIGH_CACHE:
+        ev, U = np.linalg.eigh((K + K.T) / 2)
+        _EIGH_CACHE[key] = (ev[::-1], U[:, ::-1])          # 내림차순
+    ev, U = _EIGH_CACHE[key]
+    lam = np.clip(ev[:r], 0.0, None) + EPS_P
+    Ur = U[:, :r]
+    return _acc_from_phi(Ur * np.sqrt(lam), K_te @ (Ur / np.sqrt(lam)),
+                         _onehot(y_tr, y_val), y_val, EIGLAM_P)
+
+
 def topk_overlap(a, b, n, frac):
     k = max(1, int(n * frac))
     return len(set(np.argsort(a)[::-1][:k]) & set(np.argsort(b)[::-1][:k])) / k
@@ -195,12 +280,19 @@ def _one_seed(dataset, model, seed, n, specs):
     ip = (f"{ROOT}/freeshap_res/shapley/{dataset}/inv/{model}_seed{seed}"
           f"_num{n}_val{v}_lam1e-06_signFalse_earlystopTrue_tmc500.pkl")
     if not os.path.exists(ip):
-        return None, np.nan, {}
+        return None, np.nan, np.nan, {}
     inv = sv_of(ip)
     inv_sel = sel_mean(f"{ROOT}/freeshap_res/data_selection/{dataset}/inv/predictions/"
                        f"{model}_seed{seed}_num{n}_val{v}_lam1e-06_signFalse_earlystopTrue_tmc500"
                        f"_predictions.txt")
     K = kernel_cached(dataset, model, seed, n, v)   # relerr + lev landmark 재현에 사용
+    pp, inv_acc = None, np.nan                      # 예측(pacc) 재료 / inv 기준 정확도
+    try:
+        pp = pred_parts(dataset, model, seed, n, v)
+        inv_acc = acc_inv(K, *pp)
+    except Exception as ex:                         # 라벨/캐시가 없으면 pacc 만 건너뛴다
+        print(f"  [warn] pacc 재료 없음 ({dataset}/{model}/seed{seed}): "
+              f"{type(ex).__name__}: {ex}")
     want_eigen = any(l == "eigen" for l, *_ in specs)
     ev_desc = kernel_evals_desc(dataset, model, seed, n, v) if want_eigen else None
     K_fro = float(np.linalg.norm(K)) if want_eigen else np.nan
@@ -269,14 +361,19 @@ def _one_seed(dataset, model, seed, n, specs):
                 nl_mae=np.abs(e[m]).mean(),
                 nl_rmse=np.sqrt((e[m] ** 2).mean()),
                 sel=sel_mean(sel_p),
+                # 예측 정확도: 학습셋 전체로 학습한 예측기의 val accuracy
+                pacc=(np.nan if pp is None else
+                      (acc_eigen(dataset, model, seed, n, v, K, *pp, d) if label == "eigen"
+                       else (acc_nystrom(K, *pp, S) if S is not None else np.nan))),
             )
         out[label] = rows
-    return inv, inv_sel, out
+    return inv, inv_sel, inv_acc, out
 
 
 SCALAR_KEYS = ("sp", "pe", "mae", "rmse", "p99", "mx", "o1", "o5", "o20",
                "sgn", "nl_sp", "nl_mae", "nl_rmse", "lm_mae", "lm_rmse",
-               "krel", "spread", "cal_rmse", "t100_mae", "t100_bias", "b100_mae", "b100_bias", "sel")
+               "krel", "spread", "cal_rmse", "t100_mae", "t100_bias", "b100_mae", "b100_bias",
+               "sel", "pacc")
 
 
 def collect(dataset, model, seeds, n, specs):
@@ -287,14 +384,16 @@ def collect(dataset, model, seeds, n, specs):
                            'err': seed pooling 한 점별 오차}
     자료가 없는 (seed, method, rank) 셀은 그 seed 만 빠진다.
     """
-    per, invs, isels, used = {}, [], [], []
+    per, invs, isels, iaccs, used = {}, [], [], [], []
     for s in seeds:
-        inv, isel, d = _one_seed(dataset, model, s, n, specs)
+        inv, isel, iacc, d = _one_seed(dataset, model, s, n, specs)
         if inv is None or not any(d.get(l) for l, *_ in specs):
             continue
         used.append(s); invs.append(inv)
         if not np.isnan(isel):
             isels.append(isel)
+        if not np.isnan(iacc):
+            iaccs.append(iacc)
         per[s] = d
     data = {}
     for label, *_ in specs:
@@ -321,7 +420,8 @@ def collect(dataset, model, seeds, n, specs):
             rows[R] = agg
         data[label] = rows
     inv_all = np.concatenate(invs) if invs else np.array([0.0])
-    return inv_all, (float(np.mean(isels)) if isels else np.nan), data, used
+    return (inv_all, (float(np.mean(isels)) if isels else np.nan),
+            (float(np.mean(iaccs)) if iaccs else np.nan), data, used)
 
 
 # ------------------------------------------------------------------ 그림
@@ -351,7 +451,7 @@ def panel(ax, data, key, title, ylabel, better, specs, hline=None):
 
 
 def build(dataset, model, seeds, n, specs, out_pdf):
-    inv, inv_sel, data, used = collect(dataset, model, seeds, n, specs)
+    inv, inv_sel, inv_acc, data, used = collect(dataset, model, seeds, n, specs)
     if not used:
         print(f"[skip] {dataset}: 자료 없음"); return None
     sd_txt = "seeds " + ",".join(map(str, used)) + f" (n={len(used)}, mean over seeds)"
@@ -398,7 +498,7 @@ def build(dataset, model, seeds, n, specs, out_pdf):
         #   landmark 집합에서 보이는 "top 은 음수 / bottom 은 양수" 패턴이
         #   landmark 라서인지, 그 점들의 SV 가 극단이라서인지 가르는 진단.
         #   방식과 무관하게 우하향이면 저rank 근사의 일반적 수축(shrinkage) 이다.
-        fig, axes = plt.subplots(1, 4, figsize=(24, 5.6))
+        fig, axes = plt.subplots(1, 5, figsize=(30, 5.6))
         for ax, R in zip(axes[:2], (RANKS[0], RANKS[-1])):
             for label, *_ in specs:
                 if R not in data[label]:
@@ -426,6 +526,14 @@ def build(dataset, model, seeds, n, specs, out_pdf):
             axes[3].annotate(f"exact (inv) = {inv_sel:.0f}", xy=(RANKS[-1], inv_sel),
                              xytext=(-6, 6), textcoords="offset points",
                              ha="right", fontsize=10, color="0.35")
+        # 예측 정확도: SV 오차가 아니라 "그 근사로 학습한 모델이 얼마나 맞히나"
+        panel(axes[4], data, "pacc", "Val accuracy of full-data predictor",
+              "val accuracy", "higher better", specs,
+              hline=None if np.isnan(inv_acc) else inv_acc)
+        if not np.isnan(inv_acc):
+            axes[4].annotate(f"exact (inv) = {inv_acc:.4f}", xy=(RANKS[-1], inv_acc),
+                             xytext=(-6, 6), textcoords="offset points",
+                             ha="right", fontsize=10, color="0.35")
         h, l = axes[0].get_legend_handles_labels()
         fig.legend(h, l, loc="lower center", ncol=min(4, len(specs)), fontsize=12,
                    bbox_to_anchor=(0.5, -0.03), frameon=False)
@@ -436,7 +544,10 @@ def build(dataset, model, seeds, n, specs, out_pdf):
                  "the generic low-rank effect.\n"
                  "Deviations from the uniform(pinv) curve are what landmark CHOICE adds on top of it.   "
                  "Calibrated RMSE = sd(inv)*sqrt(1-r^2): what is left once the spread/offset distortion "
-                 "is removed.",
+                 "is removed.\n"
+                 "Val accuracy = the predictor trained on ALL n points with that approximation "
+                 "(not an SV error): inv = (K+1e-6 I)^-1 Y, Nystrom = C W^+ C^T features, eigen = top-r "
+                 "pairs; ridge 1e-2.",
                  ha="center", va="top", fontsize=10, color="0.25")
         fig.tight_layout(rect=(0, 0.06, 1, 0.88))
         pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
@@ -538,7 +649,7 @@ def build(dataset, model, seeds, n, specs, out_pdf):
         cols = ["method", "rank", "d", "#seed", "Spearman", "Pearson", "MAE", "RMSE",
                 "p99|e|", "top1%", "top5%", "top20%", "sign", "nonLM ρ", "nonLM MAE",
                 "nonLM RMSE", "LM MAE", "LM RMSE",
-                "kernel relerr", "spread", "calRMSE", "top100 MAE", "top100 bias", "bot100 MAE", "bot100 bias", "sel"]
+                "kernel relerr", "spread", "calRMSE", "top100 MAE", "top100 bias", "bot100 MAE", "bot100 bias", "sel", "pred acc"]
         rows = []
         for label, *_ in specs:
             for R in sorted(data[label]):
@@ -555,7 +666,8 @@ def build(dataset, model, seeds, n, specs, out_pdf):
                              _f("lm_mae"), _f("lm_rmse"),
                              _f("krel"), _f("spread", 3), _f("cal_rmse"), _f("t100_mae", 3), _f("t100_bias", 3),
                              _f("b100_mae", 3), _f("b100_bias", 3),
-                             "--" if np.isnan(x["sel"]) else f"{x['sel']:.0f}"])
+                             "--" if np.isnan(x["sel"]) else f"{x['sel']:.0f}",
+                             _f("pacc", 4)])
         fig, ax = plt.subplots(figsize=(22, 1.1 + 0.30 * len(rows)))
         ax.axis("off")
         t = ax.table(cellText=rows, colLabels=cols, loc="upper center", cellLoc="center")

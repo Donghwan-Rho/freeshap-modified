@@ -14,7 +14,16 @@ SEEDS = [2024, 2025, 2026]
 RANKS = [1, 5, 10, 15, 20, 25, 30]
 # jitter_exp/ 의 부모가 vinfo 루트. 노트북이 reports_*/ 에서 import 해도 찾도록 절대경로.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = os.path.join(ROOT, "freeshap_res", "data_selection")
+# selection 결과 폴더는 프로토콜에 따라 갈린다 (auc_table.py 와 같은 규약).
+#   data_selection           : held-out 평가 (현재 프로토콜)
+#   data_selection_insample  : 점수 집합에서 그대로 평가한 예전 결과
+# 정확도(acc)·a0 는 SELECTION_DIR 에서, **시간은 TIMING_DIR 에서** 읽는다.
+#   시간은 Shapley pkl 에 기록된 값이라 프로토콜과 무관하고, 예전 파일만 A6000 에서
+#   측정됐음이 확인돼 있어 기본값을 data_selection_insample 로 둔다.
+SELECTION_DIR = os.environ.get("SELECTION_DIR", "data_selection")
+TIMING_DIR    = os.environ.get("TIMING_DIR", "data_selection_insample")
+BASE      = os.path.join(ROOT, "freeshap_res", SELECTION_DIR)
+BASE_TIME = os.path.join(ROOT, "freeshap_res", TIMING_DIR)
 
 def read_time(path):
     """txt 에서 (gpu_model, shapley_computation 초). 없으면 (None, None)."""
@@ -43,13 +52,15 @@ def a6000_time(paths):
             return sec
     return None
 
-def inv_paths(ds, s):
+def inv_paths(ds, s, base=None):
     n, v = NUM.get(ds, 5000), VAL.get(ds, 1000)
-    return [f"{BASE}/{ds}/inv/predictions/bert_seed{s}_num{n}_val{v}_lam1e-06_signFalse_earlystopTrue_tmc500_predictions.txt"]
+    base = BASE if base is None else base
+    return [f"{base}/{ds}/inv/predictions/bert_seed{s}_num{n}_val{v}_lam1e-06_signFalse_earlystopTrue_tmc500_predictions.txt"]
 
-def eigen_paths(ds, s, r):
+def eigen_paths(ds, s, r, base=None):
     n, v = NUM.get(ds, 5000), VAL.get(ds, 1000)
-    head = f"{BASE}/{ds}/eigen/predictions/bert_seed{s}_num{n}_val{v}"
+    base = BASE if base is None else base
+    head = f"{base}/{ds}/eigen/predictions/bert_seed{s}_num{n}_val{v}"
     tail = "_signFalse_earlystopTrue_tmc500_predictions.txt"
     return [  # 신형식(eig{r}.0, eigeps 포함) -> 신형식(eig{r}) -> 구형식(lam, eigeps 없음)
         f"{head}_eig{r}.0_eiglam1e-02_eigeps1e-8_invlam1e-06_cholesky_float32{tail}",
@@ -67,11 +78,11 @@ def print_time():
              "# λ=1e-2, eigeps=1e-8 (구형 파일명 포함). A6000 아님/파일 없음 = None",
              "# 재생성: python jitter_exp/collect_speedup_times.py", ""]
     for ds in DS:
-        inv = [a6000_time(inv_paths(ds, s)) for s in SEEDS]
+        inv = [a6000_time(inv_paths(ds, s, BASE_TIME)) for s in SEEDS]
         lines.append(f"{ds}_inv   = [{', '.join(fmt(x) for x in inv)}]")
         rows = []
         for r in RANKS:
-            row = [a6000_time(eigen_paths(ds, s, r)) for s in SEEDS]
+            row = [a6000_time(eigen_paths(ds, s, r, BASE_TIME)) for s in SEEDS]
             rows.append(f"    [{', '.join(fmt(x) for x in row)}],   # rank {r}%")
         lines.append(f"{ds}_eigen = [")
         lines.extend(rows)

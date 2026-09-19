@@ -25,6 +25,8 @@ import os
 import sys
 import pickle
 import argparse
+
+import heldout_common as HO
 import random
 
 import numpy as np
@@ -51,6 +53,20 @@ def parse_args():
                         help="Only 'inv' is supported (this is the baseline "
                              "used as ρ's denominator in our analysis).")
     parser.add_argument("--inv_lambda_", type=float, default=1e-6)
+    parser.add_argument("--config", type=str, default="ntk_prompt",
+                        help="YAML config 이름 (bert: ntk_prompt, llama: ntk_llama)")
+    # --- held-out 평가 (data selection 프로토콜) ---
+    #   기본(off) 이면 예전처럼 점수 계산에 쓴 val 에서 평가한다 (in-sample).
+    #   --heldout 이면 freeshap_res/ntk_heldout/ 의 블록을 읽어 train 과 겹치지 않는
+    #   고정 집합에서 평가한다. Shapley 값은 그대로 재사용한다.
+    parser.add_argument("--heldout", action="store_true",
+                        help="held-out 집합에서 평가 (task_ntk_heldout.py 를 먼저 돌려야 함)")
+    parser.add_argument("--heldout_size", type=int, default=None,
+                        help="기본값은 데이터셋별 규약 (MR=1066, 나머지=1000)")
+    parser.add_argument("--heldout_seed", type=int, default=HO.HO_SEED_DEFAULT)
+    parser.add_argument("--heldout_split", type=str, default=None,
+                        choices=["train", "test"],
+                        help="기본값은 데이터셋별 규약 (MR=test, 나머지=train)")
     return parser.parse_args()
 
 
@@ -68,7 +84,7 @@ def main():
     signgd         = False
     early_stopping = "True"
 
-    yaml_path = f"../configs/dshap/{dataset_name}/ntk_prompt.yaml"
+    yaml_path = f"../configs/dshap/{dataset_name}/{args.config}.yaml"
 
     # ----- seed fixing (identical to task_data_selection.py) -----
     torch.manual_seed(seed)
@@ -113,10 +129,17 @@ def main():
     print(f"[info] |train|={len(sampled_idx)}, |val|={len(sampled_val_idx)}")
 
     # ----- NTK cache (so pipeline state matches task_data_selection.py) -----
-    ntk_path = (
-        f"./freeshap_res/ntk/{dataset_name}/{model_name}"
-        f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
-    )
+    if args.heldout:
+        _ho_split = args.heldout_split or HO.ho_split_of(dataset_name)
+        _ho_tag = HO.ho_tag(HO.resolve_size(dataset_name, args.heldout_size),
+                            args.heldout_seed, _ho_split)
+        ntk_path = HO.heldout_ntk_path("./freeshap_res", dataset_name, model_name,
+                                       seed, num_train_dp, _ho_tag, signgd)
+    else:
+        ntk_path = (
+            f"./freeshap_res/ntk/{dataset_name}/{model_name}"
+            f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
+        )
     print(f"[info] ntk_path = {ntk_path}")
     with open(ntk_path, "rb") as f:
         bundle = pickle.load(f)
@@ -126,7 +149,14 @@ def main():
 
     # ----- train / val datasets (identical to task_data_selection.py) -----
     train_set = list_dataset.get_idx_dataset(sampled_idx,     split="train")
-    val_set   = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
+    if args.heldout:
+        if not np.array_equal(np.array(bundle["sampled_idx"]), sampled_idx):
+            raise RuntimeError("held-out 블록의 train subset 이 Shapley 결과와 다르다 — 중단")
+        _eval_idx = [int(i) for i in bundle["heldout_idx"]]
+        val_set = list_dataset.get_idx_dataset(_eval_idx, split=bundle["heldout_split"])
+        print(f"[info] held-out 평가: split={bundle['heldout_split']} |H|={len(_eval_idx)}")
+    else:
+        val_set = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
     probe_model.get_train_labels(train_set)
 
     print("len(train_set) =", len(train_set))
@@ -171,7 +201,7 @@ def main():
 
     # ----- write output (same ×10000-int convention as task_data_selection) -----
     setting_name = os.path.basename(shapley_path).replace('.pkl', '')
-    out_dir      = f"./freeshap_res/data_selection/{dataset_name}/inv/base_accuracy"
+    out_dir      = f"{HO.selection_base('./freeshap_res', 'heldout')}/{dataset_name}/inv/base_accuracy"
     os.makedirs(out_dir, exist_ok=True)
     out_path     = f"{out_dir}/{setting_name}_base.txt"
     with open(out_path, 'w') as f:

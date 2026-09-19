@@ -1,0 +1,122 @@
+#!/bin/sh
+# ============================================================
+# B안 2단계: data selection 을 held-out 평가 집합에서 다시 측정.
+#   val 로 점수를 매기고(= Shapley 그대로 재사용), train/test 에서 뗀 고정 집합(seed 42)에서 평가한다.
+#   FreeShap 논문 App. F.2 의 data selection 프로토콜과 같은 구성이다.
+#   기존 in-sample 결과는 freeshap_res/data_selection_insample/ 에 보관돼 있다.
+#
+#   전제: freeshap_res/ntk_heldout/ 에 그 (모델,데이터셋,seed) 블록이 있어야 한다
+#         -> 1단계  sh n07_heldout_ntk.sh  를 먼저 돌릴 것.
+#   RTE/MRPC 는 train 을 전부 써서 held-out 을 뗄 수 없다 -> 자동 스킵.
+#
+#   Shapley pkl 은 재사용한다 (TMC 재계산 없음). 돌리는 것은 selection 예측과 a0 뿐이다.
+#   removal / wrong-label 은 프로토콜이 그대로라 손대지 않는다.
+#
+# 사용: 인자에서 숫자 -> seed, 그 외 문자 -> dataset (순서 무관).
+#   CUDA_VISIBLE_DEVICES=<빈GPU> sh n06_selection_eval.sh                  # bert 5개 데이터셋 x 3 seed
+#   CUDA_VISIBLE_DEVICES=<빈GPU> sh n06_selection_eval.sh 2024 sst2        # 하나만
+#   MODEL=resnet CUDA_VISIBLE_DEVICES=<빈GPU> sh n06_selection_eval.sh     # CIFAR-10
+#   MODEL=llama  CUDA_VISIBLE_DEVICES=<빈GPU> sh n06_selection_eval.sh     # (나중에)
+#   DRY=1 sh n06_selection_eval.sh                                          # 명령만 출력
+#
+#   그 외 토글: DO_SELECTION / DO_A0 (기본 1), RANKS="1 5 10" 로 rank 목록 변경
+#
+# 결과 -> freeshap_res/data_selection/ . 이미 있으면 스킵 (resume 안전).
+# 그림은 SELECTION_DIR 로 폴더를 고른다 (기본 data_selection).
+MODEL=${MODEL:-bert}
+N=${N:-5000}
+RANKS=${RANKS:-"1 5 10 15 20 25 30"}
+DO_SELECTION=${DO_SELECTION:-1}
+DO_A0=${DO_A0:-1}
+
+case "$MODEL" in
+  bert)   CFG=ntk_prompt ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp" ;;
+  llama)  CFG=ntk_llama  ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp" ;;
+  resnet) CFG=ntk_vision ; SCRIPT=vision/task_data_selection_vision.py ; DEF_DS="cifar10" ;;
+  *) echo "[error] MODEL 은 bert / llama / resnet (받은 값: $MODEL)"; exit 1 ;;
+esac
+FLAG="--heldout"
+OUTBASE=./freeshap_res/data_selection
+
+# ---- 인자 분류: 숫자=seed, 그 외=dataset ----
+SEEDS=""; DATASETS=""
+for a in "$@"; do
+  case "$a" in
+    [0-9]*) SEEDS="$SEEDS $a" ;;
+    *)      DATASETS="$DATASETS $a" ;;
+  esac
+done
+SEEDS="${SEEDS:-2024 2025 2026}"
+DATASETS="${DATASETS:-$DEF_DS}"
+
+run() { if [ "${DRY:-0}" = "1" ]; then echo "  \$ $*"; else "$@"; fi; }
+
+echo "[cfg] MODEL=$MODEL ($CFG)  num_train=$N  seeds:$SEEDS  datasets:$DATASETS"
+echo "[cfg] ranks:$RANKS  selection=$DO_SELECTION a0=$DO_A0  -> $OUTBASE"
+
+for S in $SEEDS; do
+  for D in $DATASETS; do
+
+    # ---- dataset 별 val_sample_num / num_train (full-size 규약) ----
+    case "$D" in
+      sst2) V=872  ; ND=$N    ;;
+      mrpc) V=408  ; ND=3668  ;;   # train split 전체가 3668
+      rte)  V=277  ; ND=2490  ;;   # train split 전체가 2490
+      *)    V=1000 ; ND=$N    ;;
+    esac
+
+    case "$D" in
+      rte|mrpc) echo "  [skip] $D: train 전체를 써서 held-out 을 뗄 수 없음"; continue ;;
+    esac
+
+    echo "################ $MODEL $D (n=$ND, val=$V) seed=$S  [held-out] ################"
+
+    # ============ inv (FreeShap) ============
+    STEM="${MODEL}_seed${S}_num${ND}_val${V}_lam1e-06_signFalse_earlystopTrue_tmc500"
+    SV_PKL=./freeshap_res/shapley/$D/inv/${STEM}.pkl
+    SEL_TXT=$OUTBASE/$D/inv/predictions/${STEM}_predictions.txt
+    A0_TXT=$OUTBASE/$D/inv/base_accuracy/${STEM}_base.txt
+
+    if [ "$DO_SELECTION" = "1" ]; then
+      if [ ! -f "$SV_PKL" ]; then echo "  [no-sv] inv selection ($SV_PKL)"
+      elif [ -f "$SEL_TXT" ]; then echo "  [skip] inv selection ($SEL_TXT)"
+      else
+        echo "  [run] inv selection"
+        run python $SCRIPT $FLAG --config $CFG --seed $S --dataset_name $D \
+          --num_train_dp $ND --val_sample_num $V --approximate inv \
+          --inv_lambda_ 1e-6 --tmc_iter 500 --out_root ./freeshap_res
+      fi
+    fi
+
+    # a0 (0% 선택 기준값) — vision 은 selection 안에서 같이 저장되므로 NLP 만.
+    if [ "$DO_A0" = "1" ] && [ "$MODEL" != "resnet" ]; then
+      if [ ! -f "$SV_PKL" ]; then echo "  [no-sv] inv a0"
+      elif [ -f "$A0_TXT" ]; then echo "  [skip] inv a0 ($A0_TXT)"
+      else
+        echo "  [run] inv base accuracy"
+        run python task_base_accuracy.py $FLAG --config $CFG --seed $S --dataset_name $D \
+          --num_train_dp $ND --val_sample_num $V --tmc_iter 500 --inv_lambda_ 1e-6
+      fi
+    fi
+
+    # ============ eigen rank sweep ============
+    if [ "$DO_SELECTION" = "1" ]; then
+      for R in $RANKS; do
+        STEM="${MODEL}_seed${S}_num${ND}_val${V}_eig${R}.0_eiglam1e-02_eigeps1e-8_invlam1e-06_cholesky_float32_signFalse_earlystopTrue_tmc500"
+        SV_PKL=./freeshap_res/shapley/$D/eigen/${STEM}.pkl
+        SEL_TXT=$OUTBASE/$D/eigen/predictions/${STEM}_predictions.txt
+        if [ ! -f "$SV_PKL" ]; then echo "  [no-sv] eigen rank=${R}% ($SV_PKL)"
+        elif [ -f "$SEL_TXT" ]; then echo "  [skip] eigen rank=${R}% ($SEL_TXT)"
+        else
+          echo "  [run] eigen selection rank=${R}%"
+          run python $SCRIPT $FLAG --config $CFG --seed $S --dataset_name $D \
+            --num_train_dp $ND --val_sample_num $V --approximate eigen --eigen_rank $R \
+            --inv_lambda_ 1e-6 --eigen_lambda_ 1e-2 --eigeps 1e-8 --tmc_iter 500 \
+            --out_root ./freeshap_res
+        fi
+      done
+    fi
+
+  done
+done
+echo "[done] held-out $MODEL (n=$N / seeds:$SEEDS / datasets:$DATASETS)"
