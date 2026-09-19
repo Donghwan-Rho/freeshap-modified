@@ -16,10 +16,17 @@ import os, re, sys, glob
 
 # jitter_exp/ 의 부모가 vinfo 루트. 노트북이 reports_*/ 에서 import 해도 찾도록 절대경로.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = os.path.join(ROOT, "freeshap_res", "wrong_label_detection")
+# wld 결과 폴더. 예전(train 전체) 결과는 freeshap_res/, RTE/MRPC 를 held-out 용으로 쪼갠
+# 새 train(rte 1500 / mrpc 3000)으로 다시 돌린 결과는 freeshap_res_wld/ (n09_wld_split.sh).
+#   WLD_DIR=freeshap_res_wld python ...   /  노트북: os.environ["WLD_DIR"]=... 후 reload
+WLD_DIR = os.environ.get("WLD_DIR", "freeshap_res")
+BASE = os.path.join(ROOT, WLD_DIR, "wrong_label_detection")
 SEEDS = [2024, 2025, 2026]
 RANKS = [1, 5, 10, 15, 20, 25, 30]
-NUM = {"rte": 2490, "mrpc": 3668}
+# RTE/MRPC 의 train 크기: 예전 폴더는 전체(2490/3668), 새 폴더는 FIXED_SPLIT(1500/3000).
+#   WLD_NUM=split|full 로 강제할 수 있다 (기본은 폴더 이름으로 판단).
+_WLD_NUM = os.environ.get("WLD_NUM", "split" if WLD_DIR != "freeshap_res" else "full")
+NUM = {"rte": 1500, "mrpc": 3000} if _WLD_NUM == "split" else {"rte": 2490, "mrpc": 3668}
 VAL = {"sst2": 872, "mrpc": 408, "rte": 277}
 DS = ["sst2", "mr", "qqp", "mnli", "ag_news", "rte", "mrpc"]
 POISON = 10
