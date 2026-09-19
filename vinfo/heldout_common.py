@@ -158,3 +158,13 @@ def selection_base(out_root, mode="heldout"):
     """
     return f"{out_root}/" + {"insample": "data_selection_insample",
                              "heldout": "data_selection"}[mode]
+
+
+def removal_base(out_root, mode="heldout"):
+    """removal 결과 폴더 (selection_base 와 같은 규약).
+
+      heldout  : val 로 점수, held-out 에서 평가 (현재 프로토콜)  -> data_removing
+      insample : 점수 집합(val)에서 그대로 평가 — 예전 결과 보관용 -> data_removing_insample
+    """
+    return f"{out_root}/" + {"insample": "data_removing_insample",
+                             "heldout": "data_removing"}[mode]

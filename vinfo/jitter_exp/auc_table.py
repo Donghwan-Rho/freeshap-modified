@@ -56,6 +56,8 @@ RANKS = (1, 5, 10, 15, 20, 25, 30)
 NUM = {"rte": 2490, "mrpc": 3668}                      # full-size (removal / wld / in-sample)
 NUM_SEL = ({"rte": 1500, "mrpc": 3000}
            if os.environ.get("SELECTION_DIR", "data_selection") == "data_selection" else NUM)
+NUM_REM = ({"rte": 1500, "mrpc": 3000}
+           if os.environ.get("REMOVAL_DIR", "data_removing") == "data_removing" else NUM)
 VAL = {"sst2": 872, "mrpc": 408, "rte": 277}
 PANELS = [("sst2", "SST-2"), ("mnli", "MNLI"), ("ag_news", "AG News"),
           ("mr", "MR"), ("qqp", "QQP"), ("rte", "RTE"), ("mrpc", "MRPC")]
@@ -78,8 +80,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 환경변수로 전환한다:  SELECTION_DIR=data_selection_insample python ...
 #   (노트북에서는 os.environ["SELECTION_DIR"]=... 후 importlib.reload(auc_table))
 SELECTION_DIR = os.environ.get("SELECTION_DIR", "data_selection")
+# removal 도 같은 규약: data_removing (held-out, 기본) / data_removing_insample (예전)
+REMOVAL_DIR = os.environ.get("REMOVAL_DIR", "data_removing")
 BASE = {"selection": os.path.join(ROOT, "freeshap_res", SELECTION_DIR),
-        "removal": os.path.join(ROOT, "freeshap_res", "data_removing")}
+        "removal": os.path.join(ROOT, "freeshap_res", REMOVAL_DIR)}
 FIELD = {"selection": r"top", "removal": r"top[ _]removal[^\n]*"}
 HIGHER_IS_BETTER = {"selection": True, "removal": False, "wld": True}
 SPAN = {"selection": "top 1~{L}% 추가", "removal": "1~{L}% 제거", "wld": "inspect 1~{L}%"}
@@ -127,7 +131,7 @@ def _acc_curve(path, task):
 def _acc_candidates(task, model, ds, s, rank):
     """존재할 수 있는 파일명 변형들 (신형 -> 구형 순)."""
     base, v = BASE[task], VAL.get(ds, 1000)
-    n = (NUM_SEL if task == "selection" else NUM).get(ds, 5000)
+    n = {"selection": NUM_SEL, "removal": NUM_REM}.get(task, NUM).get(ds, 5000)
     tail = "_signFalse_earlystopTrue_tmc500_predictions.txt"
     if rank is None:
         return [f"{base}/{ds}/inv/predictions/{model}_seed{s}_num{n}_val{v}_lam1e-06{tail}"]

@@ -19,7 +19,9 @@
 #   MODEL=llama  CUDA_VISIBLE_DEVICES=<빈GPU> sh n06_selection_eval.sh     # (나중에)
 #   DRY=1 sh n06_selection_eval.sh                                          # 명령만 출력
 #
-#   그 외 토글: DO_SELECTION / DO_A0 (기본 1), RANKS="1 5 10" 로 rank 목록 변경
+#   그 외 토글: DO_SELECTION / DO_A0 / DO_REMOVAL (기본 1), RANKS="1 5 10" 로 rank 목록 변경
+#   removal 도 같은 SV·같은 held-out 블록으로 돈다 (결과 -> freeshap_res/data_removing/,
+#   예전 in-sample 결과는 data_removing_insample/ 에 보관).
 #
 # 결과 -> freeshap_res/data_selection/ . 이미 있으면 스킵 (resume 안전).
 # 그림은 SELECTION_DIR 로 폴더를 고른다 (기본 data_selection).
@@ -38,15 +40,18 @@ N=${N:-5000}
 RANKS=${RANKS:-"1 5 10 15 20 25 30"}
 DO_SELECTION=${DO_SELECTION:-1}
 DO_A0=${DO_A0:-1}
+DO_REMOVAL=${DO_REMOVAL:-1}
+REM="$(seq -s' ' 0 99)"          # removal 비율 목록 (0=제거 없음 baseline ~ 99)
 
 case "$MODEL" in
-  bert)   CFG=ntk_prompt ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
-  llama)  CFG=ntk_llama  ; SCRIPT=task_data_selection.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
-  resnet) CFG=ntk_vision ; SCRIPT=vision/task_data_selection_vision.py ; DEF_DS="cifar10" ;;
+  bert)   CFG=ntk_prompt ; SCRIPT=task_data_selection.py               ; RSCRIPT=task_data_removal.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
+  llama)  CFG=ntk_llama  ; SCRIPT=task_data_selection.py               ; RSCRIPT=task_data_removal.py               ; DEF_DS="sst2 mnli ag_news mr qqp rte mrpc" ;;
+  resnet) CFG=ntk_vision ; SCRIPT=vision/task_data_selection_vision.py ; RSCRIPT=vision/task_data_removal_vision.py ; DEF_DS="cifar10" ;;
   *) echo "[error] MODEL 은 bert / llama / resnet (받은 값: $MODEL)"; exit 1 ;;
 esac
 FLAG="--heldout"
 OUTBASE=./freeshap_res/data_selection
+REMBASE=./freeshap_res/data_removing
 
 SEEDS="${SEEDS:-2024 2025 2026}"
 DATASETS="${DATASETS:-$DEF_DS}"
@@ -100,6 +105,19 @@ for S in $SEEDS; do
       fi
     fi
 
+    # removal: 같은 SV·같은 held-out 블록으로 상위 k% 제거 곡선 (0~99%)
+    if [ "$DO_REMOVAL" = "1" ]; then
+      REM_TXT=$REMBASE/$D/inv/predictions/${STEM}_predictions.txt
+      if [ ! -f "$SV_PKL" ]; then echo "  [no-sv] inv removal"
+      elif [ -f "$REM_TXT" ]; then echo "  [skip] inv removal ($REM_TXT)"
+      else
+        echo "  [run] inv removal"
+        run python $RSCRIPT $FLAG --config $CFG --seed $S --dataset_name $D \
+          --num_train_dp $ND --val_sample_num $V --approximate inv \
+          --inv_lambda_ 1e-6 --tmc_iter 500 --out_root ./freeshap_res --num_train_removed_list $REM
+      fi
+    fi
+
     # a0 (0% 선택 기준값) — vision 은 selection 안에서 같이 저장되므로 NLP 만.
     if [ "$DO_A0" = "1" ] && [ "$MODEL" != "resnet" ]; then
       if [ ! -f "$SV_PKL" ]; then echo "  [no-sv] inv a0"
@@ -111,14 +129,15 @@ for S in $SEEDS; do
       fi
     fi
 
-    # ============ eigen rank sweep ============
-    if [ "$DO_SELECTION" = "1" ]; then
-      for R in $RANKS; do
-        STEM="${MODEL}_seed${S}_num${ND}_val${V}_eig${R}.0_eiglam1e-02_eigeps1e-8_invlam1e-06_cholesky_float32_signFalse_earlystopTrue_tmc500"
-        SV_PKL=./freeshap_res/shapley/$D/eigen/${STEM}.pkl
-        SEL_TXT=$OUTBASE/$D/eigen/predictions/${STEM}_predictions.txt
-        if [ ! -f "$SV_PKL" ]; then echo "  [no-sv] eigen rank=${R}% ($SV_PKL)"
-        elif [ -f "$SEL_TXT" ]; then echo "  [skip] eigen rank=${R}% ($SEL_TXT)"
+    # ============ eigen rank sweep (selection + removal) ============
+    for R in $RANKS; do
+      STEM="${MODEL}_seed${S}_num${ND}_val${V}_eig${R}.0_eiglam1e-02_eigeps1e-8_invlam1e-06_cholesky_float32_signFalse_earlystopTrue_tmc500"
+      SV_PKL=./freeshap_res/shapley/$D/eigen/${STEM}.pkl
+      SEL_TXT=$OUTBASE/$D/eigen/predictions/${STEM}_predictions.txt
+      REM_TXT=$REMBASE/$D/eigen/predictions/${STEM}_predictions.txt
+      if [ ! -f "$SV_PKL" ]; then echo "  [no-sv] eigen rank=${R}% ($SV_PKL)"; continue; fi
+      if [ "$DO_SELECTION" = "1" ]; then
+        if [ -f "$SEL_TXT" ]; then echo "  [skip] eigen selection rank=${R}%"
         else
           echo "  [run] eigen selection rank=${R}%"
           run python $SCRIPT $FLAG --config $CFG --seed $S --dataset_name $D \
@@ -126,8 +145,18 @@ for S in $SEEDS; do
             --inv_lambda_ 1e-6 --eigen_lambda_ 1e-2 --eigeps 1e-8 --tmc_iter 500 \
             --out_root ./freeshap_res
         fi
-      done
-    fi
+      fi
+      if [ "$DO_REMOVAL" = "1" ]; then
+        if [ -f "$REM_TXT" ]; then echo "  [skip] eigen removal rank=${R}%"
+        else
+          echo "  [run] eigen removal rank=${R}%"
+          run python $RSCRIPT $FLAG --config $CFG --seed $S --dataset_name $D \
+            --num_train_dp $ND --val_sample_num $V --approximate eigen --eigen_rank $R \
+            --inv_lambda_ 1e-6 --eigen_lambda_ 1e-2 --eigeps 1e-8 --tmc_iter 500 \
+            --out_root ./freeshap_res --num_train_removed_list $REM
+        fi
+      fi
+    done
 
   done
 done

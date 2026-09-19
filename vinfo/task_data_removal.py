@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import heldout_common as HO
 import yaml
 import torch
 import random
@@ -66,6 +67,14 @@ def parse_args():
     parser.add_argument("--num_train_removed_list", type=int, nargs='+',
                         default=[i for i in range(0, 100)],
                         help="제거할 num_train_dp 퍼센트 목록 (0=제거없음 baseline ~ 99).")
+    # --- held-out 평가 (selection 과 동일 규약) ---
+    #   기본(off) 이면 점수 계산에 쓴 val 에서 평가 (in-sample, 결과 -> data_removing_insample 이 아니라
+    #   removal_base(mode) 로 정해진 폴더). --heldout 이면 ntk_heldout/ 블록을 읽어 held-out 에서 평가.
+    parser.add_argument("--heldout", action="store_true",
+                        help="held-out 집합에서 평가 (task_ntk_heldout.py 블록 필요)")
+    parser.add_argument("--heldout_size", type=int, default=None)
+    parser.add_argument("--heldout_seed", type=int, default=HO.HO_SEED_DEFAULT)
+    parser.add_argument("--heldout_split", type=str, default=None, choices=["train", "test"])
     parser.add_argument("--config", type=str, default="ntk_prompt",
                         help="YAML config name without .yaml extension")
     return parser.parse_args()
@@ -252,10 +261,16 @@ def main():
     print("dv_result shape:", dv_result.shape)
 
     # ===== 2) NTK 캐시 로드 (selection 과 동일) =====
-    ntk_path = (
-        f"./freeshap_res/ntk/{dataset_name}/{model_name}"
-        f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
-    )
+    if args.heldout:
+        _ho_split = args.heldout_split or HO.ho_split_of(dataset_name)
+        _ho_tag = HO.ho_tag(HO.resolve_size(dataset_name, args.heldout_size), args.heldout_seed, _ho_split)
+        ntk_path = HO.heldout_ntk_path("./freeshap_res", dataset_name, model_name,
+                                       seed, num_train_dp, _ho_tag, signgd)
+    else:
+        ntk_path = (
+            f"./freeshap_res/ntk/{dataset_name}/{model_name}"
+            f"_seed{seed}_num{num_train_dp}_val{val_sample_num}_sign{signgd}.pkl"
+        )
     print(f"[info] ntk_path = {ntk_path}")
     with open(ntk_path, "rb") as f:
         bundle = pickle.load(f)
@@ -266,7 +281,14 @@ def main():
 
     # ===== 3) train/val set =====
     train_set = list_dataset.get_idx_dataset(sampled_idx, split="train")
-    val_set = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
+    if args.heldout:
+        if not np.array_equal(np.array(bundle["sampled_idx"]), sampled_idx):
+            raise RuntimeError("held-out 블록의 train subset 이 Shapley 결과와 다르다 — 중단")
+        _eval_idx = [int(i) for i in bundle["heldout_idx"]]
+        val_set = list_dataset.get_idx_dataset(_eval_idx, split=bundle["heldout_split"])
+        print(f"[info] held-out 평가: split={bundle['heldout_split']} |H|={len(_eval_idx)}")
+    else:
+        val_set = list_dataset.get_idx_dataset(sampled_val_idx, split="val")
     probe_model.get_train_labels(train_set)
 
     if approximate == "eigen":
@@ -285,7 +307,7 @@ def main():
     N = len(sorted_indices)
     all_indices = np.arange(N)
 
-    ds_base = f"{args.out_root}/data_removing/{dataset_name}"
+    ds_base = f"{HO.removal_base(args.out_root, 'heldout' if args.heldout else 'insample')}/{dataset_name}"
     setting_name = os.path.basename(shapley_path).replace('.pkl', '')
 
     # ===== 5) 제거 후 kernel_regression =====
