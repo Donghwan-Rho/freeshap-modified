@@ -47,6 +47,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collect_wld_curves as wld_src   # inv_file / eigen_file / det_rates (pkl 우선)
+import importlib as _il; _il.reload(wld_src)   # 노트북에서 reload(auc_table) 하면 WLD_DIR/WLD_NUM 도 새로 읽히게
 
 SEEDS = (2024, 2025, 2026)
 RANKS = (1, 5, 10, 15, 20, 25, 30)
